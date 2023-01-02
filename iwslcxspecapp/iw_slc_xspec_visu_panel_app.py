@@ -33,7 +33,10 @@ from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
 from bokeh.plotting import figure
 import yaml
 # Read YAML file
-with open("data.yaml", 'r') as stream:
+src_dir = os.path.dirname(__file__)
+config_path = os.path.join(src_dir,"config.yml")
+print('config_path',config_path)
+with open(config_path, 'r') as stream:
     data_loaded = yaml.safe_load(stream)
 # L1B_file_default = "/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20180104T061957_20180104T062025_020001_02211F_77E6.SAFE_L1B_xspec_IFR_VV_0.1.nc"
 L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20210413T043041_20210413T043109_037427_04695F_FE5C.SAFE_L1B_xspec_IFR_0.3.nc'
@@ -43,6 +46,7 @@ L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20170907T103019
 # subswath = 'subswath_1'
 #subswath = 'iw1_vv'
 L1B_file_default = data_loaded['datadir']
+print('L1B_file_default',L1B_file_default)
 main_map_width = 600
 main_map_height = 500
 
@@ -428,7 +432,8 @@ class monAppIW_SLC:
             # base = os.path.basename(self.l1bpath).split('_L1B')[0]
             base = os.path.basename(os.path.dirname(self.l1bpath))
             print('base', base)
-            fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
+            #fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
+            fullpath_safeL1SLC = os.path.join(os.path.dirname(os.path.dirname(L1B_file)),'raw_data',base)
             print('fullpath_safeL1SLC', fullpath_safeL1SLC)
             if subswath_id is not None:
                 subswath_nb = subswath_id.split('_')[0][-1]
@@ -556,9 +561,10 @@ rough_handler2 = figure(plot_height=small_plot_height, plot_width=small_plot_wit
 checkbox_burst = pn.widgets.Select(options=['intra', 'inter'], name='burst Type')
 checkbox_subswath = pn.widgets.Select(options=['iw1_vv', 'iw2_vv', 'iw3_vv', 'iw1_vh'], name='subswath #')
 streams_select = dict(burst_type=checkbox_burst.param.value)
-# all_avail_l1B = glob.glob('/home1/scratch/agrouaze/l1b/S1*/s1*L1B_xspec_IFR*0.6*.nc')
-all_avail_l1B = glob.glob(
-    '/home/datawork-cersat-public/project/sarwave/data/products/tests/v7/S1*/s1*L1B_xspec_IFR*0.6*.nc')
+
+files_dir = os.path.abspath(os.path.join(src_dir,'..','assests','S1*','s1*L1B_xspec_IFR*0.6*.nc'))
+print('files_dir',files_dir)
+all_avail_l1B = sorted(glob.glob(files_dir))
 print('all available L1B', len(all_avail_l1B))
 checkbox_files = pn.widgets.Select(options=all_avail_l1B, name='file')
 # files = pn.widgets.FileSelector('/home1/scratch/agrouaze/l1b/',only_files=True,file_pattern='S1*L1B_xspec_IFR*.nc') # ,value=[L1B_file_default]
