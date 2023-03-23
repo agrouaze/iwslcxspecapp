@@ -87,15 +87,15 @@ def read_data_L1B(L1B_file, typee='intra'):
     dt = datatree.open_datatree(L1B_file)
     if typee == 'intra':
         # ds = dt[subswath]['intraburst_xspectra'].to_dataset()
-        ds = dt['intraburst_xspectra'].to_dataset()
+        ds = dt['intraburst'].to_dataset()
     else:
         # ds = dt[subswath]['interburst_xspectra'].to_dataset()
-        ds = dt['interburst_xspectra'].to_dataset()
+        ds = dt['interburst'].to_dataset()
     return ds
 
 
 #
-def get_tabulated_intra_burst_data(ds):
+def get_tabulated_burst_data(ds):
     """
 
     Parameters
@@ -111,9 +111,11 @@ def get_tabulated_intra_burst_data(ds):
     altileline = []
     altilesample = []
     alburst = []
+    print('start tabulation L1B')
+    print('ds["corner_longitude"]',ds['corner_longitude'])
     for iburst in range(ds.burst.size):
-        for itilesample in range(ds['corner_longitude'].shape[1]):
-            for itileline in range(ds['corner_longitude'].shape[3]):
+        for itilesample in range(ds['corner_longitude'].tile_sample.size):
+            for itileline in range(ds['corner_longitude'].tile_line.size):
                 allons.append(
                     ds['longitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
                 allats.append(
@@ -193,42 +195,53 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     -------
 
     """
-
+    print('start display_xspec_cart_holo')
     if typee == 'Re':
         cmap = mcolors.LinearSegmentedColormap.from_list("", ["white", "violet", "mediumpurple", "cyan", "springgreen",
                                                               "yellow", "red"])
     else:
         cmap = 'PuOr'
 
-    set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam}]
+
     # if False:
     #     set_xspec = set_xspec.assign_coords({'ky': set_xspec['k_az'], 'kx': set_xspec['k_rg']})
     #     set_xspec = set_xspec.swap_dims({'freq_line': 'ky', 'freq_sample': 'kx'})
     #     kx_varname = 'kx'
     #     ky_varname = 'ky'
     # else:
+    # gather Re and Imaginary part
+    for tautau in range(3):
+        ds['xspectra_%stau' % tautau] = ds['xspectra_%stau_Re' % tautau] + 1j * ds['xspectra_%stau_Im' % tautau]
+        ds = ds.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
+    set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam}]
     set_xspec = set_xspec.swap_dims({'freq_line': 'k_az', 'freq_sample': 'k_rg'})
+    print('symmetrize_xspectrum')
     set_xspec = symmetrize_xspectrum(set_xspec, dim_range='k_rg', dim_azimuth='k_az')
     kx_varname = 'k_rg'
     ky_varname = 'k_az'
-    sp = set_xspec['xspectra_2tau_%s' % typee].mean(dim='2tau')
+    #sp = set_xspec['xspectra_2tau_%s' % typee].mean(dim='2tau')
+    sp = set_xspec['xspectra_2tau'].mean(dim='2tau')
     sp2 = sp.where(np.logical_and(np.abs(sp[kx_varname]) <= 0.14, np.abs(sp[ky_varname]) <= 0.14), drop=True)
-
+    print('spectra is ready')
     hv.extension('bokeh')
     if typee == 'Re':
-        im = hv.Image(abs(sp2), kdims=[kx_varname, ky_varname]).opts(width=small_plot_with, height=small_plot_height,
+        im = hv.Image(abs(sp2.real), kdims=[kx_varname, ky_varname]).opts(width=small_plot_with,
+                                                                     height=small_plot_height,
                                                                      cmap=cmap, colorbar=True, xlim=(
                 -0.07, 0.07))  # gist_ncar_r , 'cet_linear_wyor_100_45_c55'
     else:
-        if np.all(np.isnan(sp2)):
+        if np.all(np.isnan(sp2.imag)):
             extrema = 1
         else:
-            extrema = float(abs(sp2).max().values)
+            extrema = float(abs(sp2.imag).max().values)
 
-        im = hv.Image(sp2, kdims=[kx_varname, ky_varname]).opts(width=small_plot_with, height=small_plot_height,
-                                                                cmap=cmap, colorbar=True, xlim=(-0.07, 0.07),
+        im = hv.Image(sp2, kdims=[kx_varname, ky_varname]).opts(width=small_plot_with,
+                                                                height=small_plot_height,
+                                                                cmap=cmap, colorbar=True,
+                                                                xlim=(-0.07, 0.07),
                                                                 show_grid=True, clim=(-extrema, extrema))
     tt = hv.Text(-0.06, 0.05, 'burst %s\ntile range: %s\ntile azimuth: %s' % (bu, sam, li), halign='left', fontsize=8)
+    print('add circles on plot')
     cc = add_cartesian_wavelength_circles(default_values=[100, 300, 600])
     return im * tt * cc
 
@@ -275,12 +288,14 @@ class monAppIW_SLC:
         ds['corner_longitude'] = ds['corner_longitude'].persist()
         ds['corner_latitude'] = ds['corner_latitude'].persist()
         for iburst in range(ds.burst.size):
-            for itilesample in range(ds['corner_longitude'].shape[1]):
-                for itileline in range(ds['corner_longitude'].shape[3]):
+            for itilesample in range(ds['corner_longitude'].tile_sample.size):
+                for itileline in range(ds['corner_longitude'].tile_line.size):
                     clon = ds['corner_longitude'].isel(
-                        {'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values.ravel(order='A')
+                        {'burst': iburst, 'tile_line': itileline,
+                         'tile_sample': itilesample}).values.ravel(order='A')
                     clat = ds['corner_latitude'].isel(
-                        {'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values.ravel(order='A')
+                        {'burst': iburst, 'tile_line': itileline,
+                         'tile_sample': itilesample}).values.ravel(order='A')
                     clon2 = copy.copy(clon)
                     clat2 = copy.copy(clat)
                     clat2[2] = clat[3]
@@ -291,6 +306,7 @@ class monAppIW_SLC:
                     tmpo = np.vstack([tmpo, tmpo[0, :]])
                     tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'])
                     all_poly.append(tmppoly)
+        print('polygons are constructed')
         projection = ccrs.PlateCarree()
         if self.burst_type == 'intra':
             coco = 'blue'
@@ -358,8 +374,8 @@ class monAppIW_SLC:
         -------
 
         """
-        rough = self.xsarobjgrd.dataset['sigma0'].rio.reproject('epsg:4326', shape=(1000, 1000), nodata=np.nan).isel(
-            {'pol': 0})
+        rough = self.xsarobjgrd.dataset['sigma0'].rio.reproject('epsg:4326',
+                                                    shape=(1000, 1000), nodata=np.nan).isel({'pol': 0})
         print(rough)
         # rough = abs(self.xsarobjgrd.dataset['sigma0'].isel({ 'pol': 0})).values.ravel()
 
@@ -408,6 +424,7 @@ class monAppIW_SLC:
         -------
 
         """
+        display_rough = False  # tmp swith off for local test, march 2023
         # if L1B_file==[]:
         #     L1B_file = L1B_file_default #security util???
         if isinstance(L1B_file, list):
@@ -418,33 +435,39 @@ class monAppIW_SLC:
                 L1B_file = L1B_file_default  # security util???
         # prepare data
         logging.info('ouai')
+
         print('L1B_file', L1B_file)
         if L1B_file != self.l1bpath or subswath_id != self.subswath or burst_type != self.burst_type:
+            print('go for reading L1B')
             self.l1bpath = L1B_file
             subswath_id = os.path.basename(L1B_file).split('-')[1]+'_'+os.path.basename(L1B_file).split('-')[3]
             self.subswath = subswath_id
             self.burst_type = burst_type
             self.ds_intra = read_data_L1B(L1B_file, typee='intra')
-            self.cds_intra = get_tabulated_intra_burst_data(self.ds_intra)
+            self.cds_intra = get_tabulated_burst_data(self.ds_intra)
             self.ds_inter = read_data_L1B(L1B_file, typee='intra')
-            self.cds_inter = get_tabulated_intra_burst_data(self.ds_inter)
+            self.cds_inter = get_tabulated_burst_data(self.ds_inter)
 
-            # base = os.path.basename(self.l1bpath).split('_L1B')[0]
-            base = os.path.basename(os.path.dirname(self.l1bpath))
-            print('base', base)
-            #fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
-            fullpath_safeL1SLC = os.path.join(os.path.dirname(os.path.dirname(L1B_file)),'raw_data',base)
-            print('fullpath_safeL1SLC', fullpath_safeL1SLC)
-            if subswath_id is not None:
-                subswath_nb = subswath_id.split('_')[0][-1]
-            str_gdal = 'SENTINEL1_DS:%s:IW%s' % (fullpath_safeL1SLC, subswath_nb)
-            print('str_gdal', str_gdal)
-            self.xsarobjslc = xsar.Sentinel1Dataset(str_gdal)  # ,resolution='10m'
-            grdh_path = match_GRD_SLC.match_SLC_GRD(os.path.basename(fullpath_safeL1SLC), type_seek='GRDH')
-            if grdh_path:
-                self.xsarobjgrd = xsar.Sentinel1Dataset(grdh_path, resolution='200m')  # ,resolution='10m'
-            else:
-                print('impossible to have GRD product')
+            print('ok data is loaded')
+            if display_rough:
+                # base = os.path.basename(self.l1bpath).split('_L1B')[0]
+                base = os.path.basename(os.path.dirname(self.l1bpath))
+                print('base', base)
+                #fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
+                fullpath_safeL1SLC = os.path.join(os.path.dirname(os.path.dirname(L1B_file)),'raw_data',base)
+                print('fullpath_safeL1SLC', fullpath_safeL1SLC)
+                if subswath_id is not None:
+                    subswath_nb = subswath_id.split('_')[0][-1]
+                str_gdal = 'SENTINEL1_DS:%s:IW%s' % (fullpath_safeL1SLC, subswath_nb)
+                print('str_gdal', str_gdal)
+                self.xsarobjslc = xsar.Sentinel1Dataset(str_gdal)  # ,resolution='10m'
+                grdh_path = match_GRD_SLC.match_SLC_GRD(os.path.basename(fullpath_safeL1SLC), type_seek='GRDH')
+                if grdh_path:
+                    self.xsarobjgrd = xsar.Sentinel1Dataset(grdh_path, resolution='200m')  # ,resolution='10m'
+                else:
+                    print('impossible to have GRD product')
+        else:
+            print('nothing to do')
 
         #####
         maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
@@ -462,9 +485,11 @@ class monAppIW_SLC:
         else:
             ds = self.ds_inter
             cds = self.cds_inter
+        print('start grid display')
         maphandler = self.display_intra_inter_burst_grids()
 
         if self.xsarobjgrd:
+            print('display rougness grid')
             maphandler = self.display_roughness_grd() * maphandler  # cannot click on the point of the xspec grid
             # maphandler = maphandler*self.display_roughness_grd()
             pass
@@ -493,23 +518,35 @@ class monAppIW_SLC:
             xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Im')
             # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
             #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
-            rough_handler1 = self.display_roughness_slc(L1B_file, subswath_id, burst=burst, tile_sample_id=tile_sample,
-                                                        tile_line_id=tile_line,
-                                                        dsl1b=ds)
+            print('xspec figures are OK')
+            if display_rough:
+                rough_handler1 = self.display_roughness_slc(L1B_file, subswath_id, burst=burst,
+                                                            tile_sample_id=tile_sample,
+                                                            tile_line_id=tile_line,
+                                                            dsl1b=ds)
+            else:
+                print('empty roughness figure')
+                rough_handler1 = hv.Image((np.random.rand(100,100)))
+                print('done')
 
+            print('start to create 2nd set of xspec figures')
             burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
             tile_line_prev = cds['Tline'].iloc[self.previous_xspec_selected]
             tile_sample_prev = cds['Tsample'].iloc[self.previous_xspec_selected]
+
             xsrehandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
                                                    typee='Re')
             xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
                                                    typee='Im')
             # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
             #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
-            rough_handler2 = self.display_roughness_slc(L1B_file, subswath_id, burst=burst_prev,
-                                                        tile_sample_id=tile_sample_prev,
-                                                        tile_line_id=tile_line_prev,
-                                                        dsl1b=ds)
+            if display_rough:
+                rough_handler2 = self.display_roughness_slc(L1B_file, subswath_id, burst=burst_prev,
+                                                            tile_sample_id=tile_sample_prev,
+                                                            tile_line_id=tile_line_prev,
+                                                            dsl1b=ds)
+            else:
+                rough_handler2 = hv.Image(np.random.rand(100,100))
             res = pn.Column(
                 pn.Row(xsrehandler1, xsimhandler1, rough_handler1),
                 # layout_1,
@@ -519,6 +556,7 @@ class monAppIW_SLC:
 
         # Connect the Tap stream to the tap_histogram callback
         # tap_dmap = hv.DynamicMap(tap_update_xspec_figures, streams=[posxy, checkbox])
+        print('creating rows and columns for layout panel/bokeh')
         layout_figures = pn.Row(pn.bind(tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
         bokekjap = pn.Row(
@@ -531,6 +569,7 @@ class monAppIW_SLC:
             # pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
             # )
         )
+        print('return bokeh app layout')
         return bokekjap
 
 
@@ -562,7 +601,7 @@ checkbox_burst = pn.widgets.Select(options=['intra', 'inter'], name='burst Type'
 checkbox_subswath = pn.widgets.Select(options=['iw1_vv', 'iw2_vv', 'iw3_vv', 'iw1_vh'], name='subswath #')
 streams_select = dict(burst_type=checkbox_burst.param.value)
 
-files_dir = os.path.abspath(os.path.join(src_dir,'..','assests','S1*','s1*L1B_xspec_IFR*0.6*.nc'))
+files_dir = os.path.abspath(os.path.join(src_dir,'..','assets','S1*','s1*L1B_xspec_IFR*.nc'))
 print('files_dir',files_dir)
 all_avail_l1B = sorted(glob.glob(files_dir))
 print('all available L1B', len(all_avail_l1B))
@@ -579,5 +618,6 @@ layout = pn.Row(pn.bind(instclass.update_app_burst,
                         ))
 # pn.Row(widget_dmap).servable()
 # layout = pn.Row(xsrehandler1)
+print('go servable')
 layout.servable()
 # pn.panel("# Test").servable()
