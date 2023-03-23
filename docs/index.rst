@@ -1,24 +1,17 @@
-############################################################################
-l1butils: functions to play with IFREMER L1B Sentinel-1 SLC SAR products
-############################################################################
+################################################################################
+iwslcxspecapp: web application to visualize Sentinel-1 level-1B SLC SAR products
+################################################################################
 
-**l1butils** is a library to exploit level 1-B SAR SLC products. Objets manipulated are all `xarray`_.
+**iwslcxspecapp** is a library to visualize the cross spectrum stored in level 1-B SAR SLC products.
 
-Acquisition modes available in L1B IFREMER product family are IW and WV.
+Objets manipulated are `xarray`_.
+
+Sentinel-1 acquisition modes handled by the library: L1B IW
 
 The products are *netCDF* files containing `datatree`_ object.
 
 
 .. jupyter-execute:: examples/intro.py
-
-
-
-.. image:: oceanspectrumSAR.png
-   :width: 500px
-   :height: 400px
-   :scale: 110 %
-   :alt: real part SAR cross spectrum
-   :align: right
 
 
 
@@ -28,7 +21,7 @@ Documentation
 Overview
 ........
 
-    **l1butils**  helps to read L1B products (especially IW TOPS Scan SAR acquistions) containing both intra burst and
+    **iwslcxspecapp**  helps to display L1B products (especially IW TOPS Scan SAR acquisitions) containing both intra burst and
     inter (i.e. overlapping bursts) burst cross spectrum.
 
 
@@ -65,5 +58,5 @@ Last documentation build: |today|
 
    basic_api
 
-.. _on github: https://github.com/umr-lops/utils_xsarslc_l1b
+.. _on github: https://github.com/agrouaze/iwslcxspecapp
 .. _datatree: https://github.com/xarray-contrib/datatree
