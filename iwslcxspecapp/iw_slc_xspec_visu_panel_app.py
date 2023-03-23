@@ -280,13 +280,13 @@ class monAppIW_SLC:
         """
         all_poly = []
         if self.burst_type == 'intra':
-            ds = self.ds_intra
+            ds = self.ds_intra.load()
             cds = self.cds_intra
         else:
-            ds = self.ds_inter
+            ds = self.ds_inter.load()
             cds = self.cds_inter
-        ds['corner_longitude'] = ds['corner_longitude'].persist()
-        ds['corner_latitude'] = ds['corner_latitude'].persist()
+        ds['corner_longitude'] = ds['corner_longitude']
+        ds['corner_latitude'] = ds['corner_latitude']
         for iburst in range(ds.burst.size):
             for itilesample in range(ds['corner_longitude'].tile_sample.size):
                 for itileline in range(ds['corner_longitude'].tile_line.size):
