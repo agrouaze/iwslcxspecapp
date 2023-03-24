@@ -1,2 +1,2 @@
 datadir: "../assests/S1B_IW_SLC__1SDV_20211026T045709_20211026T045736_029302_037F35_1CD7.SAFE/s1b-iw1-slc-vv-20211026t045710-20211026t045735-029302-037f35-004_L1B_xspec_IFR_0.6.nc"
-filesdir : "../assets/"
+files_dir : "../assets/"
