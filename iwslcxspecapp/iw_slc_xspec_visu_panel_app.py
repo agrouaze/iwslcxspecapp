@@ -34,18 +34,22 @@ from bokeh.plotting import figure
 import yaml
 # Read YAML file
 src_dir = os.path.dirname(__file__)
-config_path = os.path.join(src_dir,"config.yml")
+if os.path.exists(os.path.join(src_dir,"localconfig.yml")):
+    config_path = os.path.join(src_dir,"localconfig.yml")
+else:
+    config_path = os.path.join(src_dir,"config.yml")
 print('config_path',config_path)
 with open(config_path, 'r') as stream:
     data_loaded = yaml.safe_load(stream)
 # L1B_file_default = "/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20180104T061957_20180104T062025_020001_02211F_77E6.SAFE_L1B_xspec_IFR_VV_0.1.nc"
-L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20210413T043041_20210413T043109_037427_04695F_FE5C.SAFE_L1B_xspec_IFR_0.3.nc'
-L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20220921T063225_20220921T063252_045099_05639C_D284.SAFE/s1a-iw2-slc-vv-20220921t063225-20220921t063251-045099-05639c-005_L1B_xspec_IFR_0.6.nc'
-L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20220921T063225_20220921T063252_045099_05639C_D284.SAFE/s1a-iw2-slc-vv-20220921t063225-20220921t063251-045099-05639c-005_L1B_xspec_IFR_0.6.nc'
-L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20170907T103019_20170907T103047_018268_01EB76_5F55.SAFE/s1a-iw2-slc-vv-20170907t103020-20170907t103045-018268-01eb76-005_L1B_xspec_IFR_0.6.nc'
+# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20210413T043041_20210413T043109_037427_04695F_FE5C.SAFE_L1B_xspec_IFR_0.3.nc'
+# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20220921T063225_20220921T063252_045099_05639C_D284.SAFE/s1a-iw2-slc-vv-20220921t063225-20220921t063251-045099-05639c-005_L1B_xspec_IFR_0.6.nc'
+# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20220921T063225_20220921T063252_045099_05639C_D284.SAFE/s1a-iw2-slc-vv-20220921t063225-20220921t063251-045099-05639c-005_L1B_xspec_IFR_0.6.nc'
+# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20170907T103019_20170907T103047_018268_01EB76_5F55.SAFE/s1a-iw2-slc-vv-20170907t103020-20170907t103045-018268-01eb76-005_L1B_xspec_IFR_0.6.nc'
 # subswath = 'subswath_1'
 #subswath = 'iw1_vv'
 L1B_file_default = data_loaded['datadir']
+files_dir = data_loaded['files_dir']
 print('L1B_file_default',L1B_file_default)
 main_map_width = 600
 main_map_height = 500
@@ -601,9 +605,11 @@ checkbox_burst = pn.widgets.Select(options=['intra', 'inter'], name='burst Type'
 checkbox_subswath = pn.widgets.Select(options=['iw1_vv', 'iw2_vv', 'iw3_vv', 'iw1_vh'], name='subswath #')
 streams_select = dict(burst_type=checkbox_burst.param.value)
 
-files_dir = os.path.abspath(os.path.join(src_dir,'..','assets','S1*','s1*L1B_xspec_IFR*.nc'))
+#files_dir = os.path.abspath(os.path.join(src_dir,'..','assets','S1*','s1*L1B_xspec_IFR*.nc'))
+pattern_list_files_dir = os.path.abspath(os.path.join(files_dir,'S1*','s1*L1B_xspec_IFR*.nc'))
 print('files_dir',files_dir)
-all_avail_l1B = sorted(glob.glob(files_dir))
+print('pattern_list_files_dir',pattern_list_files_dir)
+all_avail_l1B = sorted(glob.glob(pattern_list_files_dir))
 print('all available L1B', len(all_avail_l1B))
 checkbox_files = pn.widgets.Select(options=all_avail_l1B, name='file')
 # files = pn.widgets.FileSelector('/home1/scratch/agrouaze/l1b/',only_files=True,file_pattern='S1*L1B_xspec_IFR*.nc') # ,value=[L1B_file_default]
