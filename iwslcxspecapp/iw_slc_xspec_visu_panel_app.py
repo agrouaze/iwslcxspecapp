@@ -18,11 +18,12 @@ import cartopy.crs as ccrs
 import geoviews as gv
 import xsar
 import sys
-#import iwslcxspecapp.get_path_from_base_SAFE
-#import iwslcxspecapp.match_GRD_SLC
+# import iwslcxspecapp.get_path_from_base_SAFE
+# import iwslcxspecapp.match_GRD_SLC
 from iwslcxspecapp.symmetrize_xspec import symmetrize_xspectrum
 import os
 import glob
+from cartopy import crs
 from holoviews.operation.datashader import datashade, rasterize
 from matplotlib import colors as mcolors
 import pandas as pd
@@ -38,6 +39,8 @@ small_plot_height = 300
 small_plot_width = 400
 checkbox_burst = pn.widgets.Select(options=['intra', 'inter'], name='burst Type')
 checkbox_subswath = pn.widgets.Select(options=['iw1_vv', 'iw2_vv', 'iw3_vv', 'iw1_vh'], name='subswath #')
+
+
 ################################################
 def get_tile_corner_image_idx(ds, bursti, tile_line_i, tile_sample_i):
     """
@@ -71,13 +74,15 @@ def get_tile_corner_image_idx(ds, bursti, tile_line_i, tile_sample_i):
 
 def read_data_L1B(L1B_file, typee='intra'):
     # parentdir = os.path.basename(os.path.dirname(L1B_file))
-    dt = datatree.open_datatree(L1B_file)
-    if typee == 'intra':
-        # ds = dt[subswath]['intraburst_xspectra'].to_dataset()
-        ds = dt['intraburst'].to_dataset()
-    else:
-        # ds = dt[subswath]['interburst_xspectra'].to_dataset()
-        ds = dt['interburst'].to_dataset()
+    #dt = datatree.open_datatree(L1B_file)
+    ds = xr.open_dataset(L1B_file, group=typee+'burst')
+    # if typee == 'intra':
+    #     # ds = dt[subswath]['intraburst_xspectra'].to_dataset()
+    #     #ds = dt['intraburst'].to_dataset()
+    #
+    # else:
+    #     # ds = dt[subswath]['interburst_xspectra'].to_dataset()
+    #     #ds = dt['interburst'].to_dataset()
     return ds
 
 
@@ -99,7 +104,7 @@ def get_tabulated_burst_data(ds):
     altilesample = []
     alburst = []
     print('start tabulation L1B')
-    print('ds["corner_longitude"]',ds['corner_longitude'])
+    #print('ds["corner_longitude"]', ds['corner_longitude'])
     for iburst in range(ds.burst.size):
         for itilesample in range(ds['corner_longitude'].tile_sample.size):
             for itileline in range(ds['corner_longitude'].tile_line.size):
@@ -189,7 +194,6 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     else:
         cmap = 'PuOr'
 
-
     # if False:
     #     set_xspec = set_xspec.assign_coords({'ky': set_xspec['k_az'], 'kx': set_xspec['k_rg']})
     #     set_xspec = set_xspec.swap_dims({'freq_line': 'ky', 'freq_sample': 'kx'})
@@ -197,9 +201,13 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     #     ky_varname = 'ky'
     # else:
     # gather Re and Imaginary part
-    for tautau in range(3):
-        ds['xspectra_%stau' % tautau] = ds['xspectra_%stau_Re' % tautau] + 1j * ds['xspectra_%stau_Im' % tautau]
-        ds = ds.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
+    if 'xspectra_0tau_Re' in ds: #intra burst case
+        for tautau in range(3):
+            ds['xspectra_%stau' % tautau] = ds['xspectra_%stau_Re' % tautau] + 1j * ds['xspectra_%stau_Im' % tautau]
+            ds = ds.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
+    else: # inter burst case
+        ds['xspectra'] = ds['xspectra_Re'] + 1j * ds['xspectra_Im']
+        ds = ds.drop(['xspectra_Re', 'xspectra_Im'])
     set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam}]
     set_xspec = set_xspec.swap_dims({'freq_line': 'k_az', 'freq_sample': 'k_rg'})
     print('symmetrize_xspectrum')
@@ -207,15 +215,18 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     print('symmetrzied')
     kx_varname = 'k_rg'
     ky_varname = 'k_az'
-    #sp = set_xspec['xspectra_2tau_%s' % typee].mean(dim='2tau')
-    sp = set_xspec['xspectra_2tau'].mean(dim='2tau')
+    # sp = set_xspec['xspectra_2tau_%s' % typee].mean(dim='2tau')
+    if 'xspectra_2tau' in set_xspec:
+        sp = set_xspec['xspectra_2tau'].mean(dim='2tau')
+    else:
+        sp = set_xspec['xspectra'] # inter burst case
     sp2 = sp.where(np.logical_and(np.abs(sp[kx_varname]) <= 0.14, np.abs(sp[ky_varname]) <= 0.14), drop=True)
     print('spectra is ready')
     hv.extension('bokeh')
     if typee == 'Re':
         im = hv.Image(abs(sp2.real), kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
-                                                                     height=small_plot_height,
-                                                                     cmap=cmap, colorbar=True, xlim=(
+                                                                          height=small_plot_height,
+                                                                          cmap=cmap, colorbar=True, xlim=(
                 -0.07, 0.07))  # gist_ncar_r , 'cet_linear_wyor_100_45_c55'
     else:
         if np.all(np.isnan(sp2.imag)):
@@ -224,10 +235,10 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
             extrema = float(abs(sp2.imag).max().values)
 
         im = hv.Image(sp2.imag, kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
-                                                                height=small_plot_height,
-                                                                cmap=cmap, colorbar=True,
-                                                                xlim=(-0.07, 0.07),
-                                                                show_grid=True, clim=(-extrema, extrema))
+                                                                     height=small_plot_height,
+                                                                     cmap=cmap, colorbar=True,
+                                                                     xlim=(-0.07, 0.07),
+                                                                     show_grid=True, clim=(-extrema, extrema))
     tt = hv.Text(-0.06, 0.05, 'burst %s\ntile range: %s\ntile azimuth: %s' % (bu, sam, li), halign='left', fontsize=8)
     print('add circles on plot')
     cc = add_cartesian_wavelength_circles(default_values=[100, 300, 600])
@@ -292,7 +303,7 @@ class monAppIW_SLC:
                     clon2[3] = clon[2]
                     tmpo = np.stack([clon2, clat2]).T
                     tmpo = np.vstack([tmpo, tmpo[0, :]])
-                    tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'])
+                    tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
                     all_poly.append(tmppoly)
         print('polygons are constructed')
         projection = ccrs.PlateCarree()
@@ -301,15 +312,17 @@ class monAppIW_SLC:
         else:
             coco = 'red'
         points = cds.hvplot.points(x='longitude', y='latitude', hover_cols='all', use_index=False,
-                                   projection=projection, label=self.burst_type, color=coco).opts(tools=['hover'],
-                                                                                                  size=10)
+                                   label=self.burst_type, color=coco,geo=True,
+                                   crs=projection).opts(tools=['hover'],
+                                                                size=10)
         # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
         # gv.tile_sources.Wikipedia  *
-        res = (gv.tile_sources.Wikipedia * gv.Overlay(all_poly) * points).opts(width=main_map_width,
-                                                                               height=main_map_height,
-                                                                               show_legend=True, title=os.path.basename(
-                self.l1bpath) + '\n' + self.subswath,
-                                                                               fontsize={'title': 8})
+        res = (gv.tile_sources.EsriImagery * gv.Overlay(all_poly) * points).opts(width=main_map_width,
+                                                                                 height=main_map_height,
+                                                                                 show_legend=True,
+                                                                                 title=os.path.basename(
+                                                                                     self.l1bpath) + '\n' + self.subswath,
+                                                                                 fontsize={'title': 8})
         return res
 
     def display_roughness_slc(self, l1b_path, subswath, burst, tile_sample_id, tile_line_id, dsl1b):
@@ -363,7 +376,7 @@ class monAppIW_SLC:
 
         """
         rough = self.xsarobjgrd.dataset['sigma0'].rio.reproject('epsg:4326',
-                                                    shape=(1000, 1000), nodata=np.nan).isel({'pol': 0})
+                                                                shape=(1000, 1000), nodata=np.nan).isel({'pol': 0})
         print(rough)
         # rough = abs(self.xsarobjgrd.dataset['sigma0'].isel({ 'pol': 0})).values.ravel()
 
@@ -399,7 +412,18 @@ class monAppIW_SLC:
         res = gv.Path(self.xsarobjgrd.footprint)
         return res
 
-    def update_app_burst(self, burst_type, subswath_id, L1B_file,all_avail_l1B):
+    def set_input_l1b_data(self,L1B_file,burst_type):
+        self.l1bpath = L1B_file
+        subswath_id = os.path.basename(L1B_file).split('-')[1] + '_' + os.path.basename(L1B_file).split('-')[3]
+        self.subswath = subswath_id
+        self.burst_type = burst_type
+        self.ds_intra = read_data_L1B(L1B_file, typee='intra')
+        self.cds_intra = get_tabulated_burst_data(self.ds_intra)
+        self.ds_inter = read_data_L1B(L1B_file, typee='inter')
+        self.cds_inter = get_tabulated_burst_data(self.ds_inter)
+
+
+    def update_app_burst(self, burst_type, subswath_id, L1B_file, all_avail_l1B):
         """
 
         Parameters
@@ -422,29 +446,22 @@ class monAppIW_SLC:
                 print('new L1B ', L1B_file)
             else:
                 pass
-                #L1B_file = L1B_file_default  # security util???
+                # L1B_file = L1B_file_default  # security util???
         # prepare data
-        logging.info('ouai')
+        logging.info('oui')
 
         print('L1B_file', L1B_file)
         if L1B_file != self.l1bpath or subswath_id != self.subswath or burst_type != self.burst_type:
             print('go for reading L1B')
-            self.l1bpath = L1B_file
-            subswath_id = os.path.basename(L1B_file).split('-')[1]+'_'+os.path.basename(L1B_file).split('-')[3]
-            self.subswath = subswath_id
-            self.burst_type = burst_type
-            self.ds_intra = read_data_L1B(L1B_file, typee='intra')
-            self.cds_intra = get_tabulated_burst_data(self.ds_intra)
-            self.ds_inter = read_data_L1B(L1B_file, typee='intra')
-            self.cds_inter = get_tabulated_burst_data(self.ds_inter)
+            self.set_input_l1b_data(L1B_file,burst_type)
 
             print('ok data is loaded')
             if display_rough:
                 # base = os.path.basename(self.l1bpath).split('_L1B')[0]
                 base = os.path.basename(os.path.dirname(self.l1bpath))
                 print('base', base)
-                #fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
-                fullpath_safeL1SLC = os.path.join(os.path.dirname(os.path.dirname(L1B_file)),'raw_data',base)
+                # fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
+                fullpath_safeL1SLC = os.path.join(os.path.dirname(os.path.dirname(L1B_file)), 'raw_data', base)
                 print('fullpath_safeL1SLC', fullpath_safeL1SLC)
                 if subswath_id is not None:
                     subswath_nb = subswath_id.split('_')[0][-1]
@@ -516,7 +533,7 @@ class monAppIW_SLC:
                                                             dsl1b=ds)
             else:
                 print('empty roughness figure')
-                rough_handler1 = hv.Image((np.random.rand(100,100)))
+                rough_handler1 = hv.Image((np.random.rand(100, 100)))
                 print('done')
 
             print('start to create 2nd set of xspec figures')
@@ -536,7 +553,7 @@ class monAppIW_SLC:
                                                             tile_line_id=tile_line_prev,
                                                             dsl1b=ds)
             else:
-                rough_handler2 = hv.Image(np.random.rand(100,100))
+                rough_handler2 = hv.Image(np.random.rand(100, 100))
             res = pn.Column(
                 pn.Row(xsrehandler1, xsimhandler1, rough_handler1),
                 # layout_1,
@@ -550,6 +567,8 @@ class monAppIW_SLC:
         layout_figures = pn.Row(pn.bind(tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
 
+
+        
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
         bokekjap = pn.Row(
             pn.Column(pn.Column(checkbox_files, pn.Row(checkbox_burst, checkbox_subswath), maphandler, posxy)),
@@ -564,7 +583,7 @@ class monAppIW_SLC:
         print('return bokeh app layout')
         return bokekjap
 
-    def get_checkboxes(self,all_avail_l1B):
+    def get_checkboxes(self, all_avail_l1B):
         ##############################
         # add the checboxes
 
@@ -572,7 +591,5 @@ class monAppIW_SLC:
         ##############################
         return checkbox_files
 
-
 ############################################################################
 #####################NO MAIN BUT IT LOOKS LIKE#############################
-
