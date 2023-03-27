@@ -423,6 +423,10 @@ class monAppIW_SLC:
         self.cds_inter = get_tabulated_burst_data(self.ds_inter)
 
 
+
+
+
+
     def update_app_burst(self, burst_type, subswath_id, L1B_file, all_avail_l1B):
         """
 
@@ -561,17 +565,27 @@ class monAppIW_SLC:
             )
             return res
 
+        def reset_index_xpsec_selected(value_burst):
+            """
+            index of points selected are integer in the order of vectorized tabulated data
+            :return:
+            """
+            self.previous_xspec_selected = 0
+            self.latest_click = 0
+
         # Connect the Tap stream to the tap_histogram callback
         # tap_dmap = hv.DynamicMap(tap_update_xspec_figures, streams=[posxy, checkbox])
         print('creating rows and columns for layout panel/bokeh')
+        print('posxy.param.x',posxy.param.x)
         layout_figures = pn.Row(pn.bind(tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
 
+        # try to bind the checkbox_burst with a function to set to zero the previous click (avoid bugs)
+        bindo_burst = pn.bind(reset_index_xpsec_selected,value_burst=checkbox_burst)
 
-        
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
         bokekjap = pn.Row(
-            pn.Column(pn.Column(checkbox_files, pn.Row(checkbox_burst, checkbox_subswath), maphandler, posxy)),
+            pn.Column(pn.Column(checkbox_files, pn.Row(bindo_burst, checkbox_subswath), maphandler, posxy)),
             layout_figures,
             # pn.Column(
             # pn.Row(xsrehandler1,xsimhandler1,rough_handler1),
