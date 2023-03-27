@@ -425,6 +425,13 @@ class monAppIW_SLC:
         self.ds_inter = read_data_L1B(L1B_file, typee='inter')
         self.cds_inter = get_tabulated_burst_data(self.ds_inter)
 
+    def reset_index_xpsec_selected(self,value_burst):
+        """
+        index of points selected are integer in the order of vectorized tabulated data
+        :return:
+        """
+        self.previous_xspec_selected = 0
+        self.latest_click = 0
 
     def update_app_burst(self, burst_type, subswath_id, L1B_file, all_avail_l1B):
         """
@@ -519,7 +526,7 @@ class monAppIW_SLC:
                                         y=posxy.param.y))
 
         # try to bind the checkbox_burst with a function to set to zero the previous click (avoid bugs)
-        bindo_burst = pn.bind(reset_index_xpsec_selected,value_burst=checkbox_burst)
+        bindo_burst = pn.bind(self.reset_index_xpsec_selected,value_burst=checkbox_burst)
 
         
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
