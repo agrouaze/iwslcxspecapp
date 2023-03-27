@@ -17,6 +17,9 @@ import hvplot.xarray  # noqa
 import cartopy.crs as ccrs
 import geoviews as gv
 import xsar
+from shapely.ops import transform
+from shapely.geometry import Point
+import pyproj
 import sys
 # import iwslcxspecapp.get_path_from_base_SAFE
 # import iwslcxspecapp.match_GRD_SLC
@@ -32,7 +35,7 @@ from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
                           GeoJSONDataSource, HoverTool,
                           LinearColorMapper, Slider)
 from bokeh.plotting import figure
-
+webMercator = pyproj.CRS('EPSG:3857')
 main_map_width = 600
 main_map_height = 500
 small_plot_height = 300
@@ -306,15 +309,16 @@ class monAppIW_SLC:
                     tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
                     all_poly.append(tmppoly)
         print('polygons are constructed')
-        projection = ccrs.PlateCarree()
+        self.projection = ccrs.PlateCarree()
         if self.burst_type == 'intra':
             coco = 'blue'
         else:
             coco = 'red'
         points = cds.hvplot.points(x='longitude', y='latitude', hover_cols='all', use_index=False,
                                    label=self.burst_type, color=coco,geo=True,
-                                   crs=projection).opts(tools=['hover'],
+                                   crs=self.projection).opts(tools=['hover'],
                                                                 size=10)
+        print('crs',points.crs)
         # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
         # gv.tile_sources.Wikipedia  *
         res = (gv.tile_sources.EsriImagery * gv.Overlay(all_poly) * points).opts(width=main_map_width,
@@ -437,7 +441,7 @@ class monAppIW_SLC:
         -------
 
         """
-        display_rough = False  # tmp swith off for local test, march 2023
+        self.display_rough = False  # tmp swith off for local test, march 2023
         # if L1B_file==[]:
         #     L1B_file = L1B_file_default #security util???
         if isinstance(L1B_file, list):
@@ -456,7 +460,7 @@ class monAppIW_SLC:
             self.set_input_l1b_data(L1B_file,burst_type)
 
             print('ok data is loaded')
-            if display_rough:
+            if self.display_rough:
                 # base = os.path.basename(self.l1bpath).split('_L1B')[0]
                 base = os.path.basename(os.path.dirname(self.l1bpath))
                 print('base', base)
@@ -501,70 +505,20 @@ class monAppIW_SLC:
             # maphandler = maphandler*self.display_roughness_grd()
             pass
         posxy = hv.streams.Tap(source=maphandler, x=0, y=0)
+        print('posxy',posxy,type(posxy),dir(posxy))
         # interactive selection of a point on the map
         # Declare Tap stream with heatmap as source and initial values
 
-        lons = cds['longitude'].values
-        lats = cds['latitude'].values
+        self.lons = cds['longitude'].values
+        self.lats = cds['latitude'].values
 
-        def tap_update_xspec_figures(x, y):
-            if self.burst_type == 'intra':
-                ds = self.ds_intra
-                cds = self.cds_intra
-            else:
-                ds = self.ds_inter
-                cds = self.cds_inter
-            selected_pt = np.argmin((x - lons) ** 2 + (y - lats) ** 2)
-            self.previous_xspec_selected = copy.copy(self.latest_click)
-            self.latest_click = selected_pt
-            print('selected_pt', selected_pt)
-            burst = cds['burst'].iloc[selected_pt]
-            tile_line = cds['Tline'].iloc[selected_pt]
-            tile_sample = cds['Tsample'].iloc[selected_pt]
-            xsrehandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Re')
-            xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Im')
-            # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
-            #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
-            print('xspec figures are OK')
-            if display_rough:
-                rough_handler1 = self.display_roughness_slc(L1B_file, subswath_id, burst=burst,
-                                                            tile_sample_id=tile_sample,
-                                                            tile_line_id=tile_line,
-                                                            dsl1b=ds)
-            else:
-                print('empty roughness figure')
-                rough_handler1 = hv.Image((np.random.rand(100, 100)))
-                print('done')
 
-            print('start to create 2nd set of xspec figures')
-            burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
-            tile_line_prev = cds['Tline'].iloc[self.previous_xspec_selected]
-            tile_sample_prev = cds['Tsample'].iloc[self.previous_xspec_selected]
-
-            xsrehandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
-                                                   typee='Re')
-            xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
-                                                   typee='Im')
-            # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
-            #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
-            if display_rough:
-                rough_handler2 = self.display_roughness_slc(L1B_file, subswath_id, burst=burst_prev,
-                                                            tile_sample_id=tile_sample_prev,
-                                                            tile_line_id=tile_line_prev,
-                                                            dsl1b=ds)
-            else:
-                rough_handler2 = hv.Image(np.random.rand(100, 100))
-            res = pn.Column(
-                pn.Row(xsrehandler1, xsimhandler1, rough_handler1),
-                # layout_1,
-                pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
-            )
-            return res
 
         # Connect the Tap stream to the tap_histogram callback
         # tap_dmap = hv.DynamicMap(tap_update_xspec_figures, streams=[posxy, checkbox])
         print('creating rows and columns for layout panel/bokeh')
-        layout_figures = pn.Row(pn.bind(tap_update_xspec_figures, x=posxy.param.x,
+        print('posxy.param.x', posxy.param.x, type(posxy.param.x), dir(posxy.param.x))
+        layout_figures = pn.Row(pn.bind(self.tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
 
 
@@ -582,6 +536,75 @@ class monAppIW_SLC:
         )
         print('return bokeh app layout')
         return bokekjap
+
+    def tap_update_xspec_figures(self,x, y):
+        """
+        previoulsy a method of update_app_burst method
+        :param y:
+        :return:
+        """
+        if self.burst_type == 'intra':
+            ds = self.ds_intra
+            cds = self.cds_intra
+        else:
+            ds = self.ds_inter
+            cds = self.cds_inter
+
+        wgs84 = pyproj.CRS('EPSG:4326')
+        utm = pyproj.CRS('EPSG:32618')
+
+        project = pyproj.Transformer.from_crs(webMercator, self.projection, always_xy=True).transform
+
+        xygeo = transform(project, Point(x,y))
+        print('xny',x,y)
+        print('xygeo,',xygeo, xygeo.x, xygeo.y)
+
+        selected_pt = np.argmin((xygeo.x - self.lons) ** 2 + (xygeo.y - self.lats) ** 2)
+        self.previous_xspec_selected = copy.copy(self.latest_click)
+        self.latest_click = selected_pt
+        print('selected_pt', selected_pt)
+        burst = cds['burst'].iloc[selected_pt]
+        tile_line = cds['Tline'].iloc[selected_pt]
+        tile_sample = cds['Tsample'].iloc[selected_pt]
+        xsrehandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Re')
+        xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Im')
+        # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
+        #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
+        print('xspec figures are OK')
+        if self.display_rough:
+            rough_handler1 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst,
+                                                        tile_sample_id=tile_sample,
+                                                        tile_line_id=tile_line,
+                                                        dsl1b=ds)
+        else:
+            print('empty roughness figure')
+            rough_handler1 = hv.Image((np.random.rand(100, 100)))
+            print('done')
+
+        print('start to create 2nd set of xspec figures')
+        burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
+        tile_line_prev = cds['Tline'].iloc[self.previous_xspec_selected]
+        tile_sample_prev = cds['Tsample'].iloc[self.previous_xspec_selected]
+
+        xsrehandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
+                                               typee='Re')
+        xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
+                                               typee='Im')
+        # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
+        #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
+        if self.display_rough:
+            rough_handler2 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst_prev,
+                                                        tile_sample_id=tile_sample_prev,
+                                                        tile_line_id=tile_line_prev,
+                                                        dsl1b=ds)
+        else:
+            rough_handler2 = hv.Image(np.random.rand(100, 100))
+        res = pn.Column(
+            pn.Row(xsrehandler1, xsimhandler1, rough_handler1),
+            # layout_1,
+            pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
+        )
+        return res
 
     def get_checkboxes(self, all_avail_l1B):
         ##############################
