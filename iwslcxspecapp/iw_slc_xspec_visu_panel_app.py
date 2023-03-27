@@ -11,6 +11,7 @@ import holoviews as hv
 import datatree
 import xarray as xr
 import logging
+import geopandas as gpd
 import copy
 import hvplot.pandas
 import hvplot.xarray  # noqa
@@ -190,7 +191,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     -------
 
     """
-    print('start display_xspec_cart_holo')
+    logging.info('start display_xspec_cart_holo')
     if typee == 'Re':
         cmap = mcolors.LinearSegmentedColormap.from_list("", ["white", "violet", "mediumpurple", "cyan", "springgreen",
                                                               "yellow", "red"])
@@ -266,6 +267,8 @@ class monAppIW_SLC:
         self.xsarobjslc = None
         self.xsarobjgrd = None
         self.burst_type = 'intra'
+        self.lons =  None
+        self.lats = None
 
     def display_intra_inter_burst_grids(self):
         """
@@ -287,6 +290,8 @@ class monAppIW_SLC:
         else:
             ds = self.ds_inter.load()
             cds = self.cds_inter
+        self.lons = cds['longitude'].values
+        self.lats = cds['latitude'].values
         ds['corner_longitude'] = ds['corner_longitude']
         ds['corner_latitude'] = ds['corner_latitude']
         for iburst in range(ds.burst.size):
@@ -318,9 +323,11 @@ class monAppIW_SLC:
                                    label=self.burst_type, color=coco,geo=True,
                                    crs=self.projection).opts(tools=['hover'],
                                                                 size=10)
+        print('crs',points.crs)
         # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
         # gv.tile_sources.Wikipedia  *
-        res = (gv.tile_sources.EsriImagery * gv.Overlay(all_poly) * points).opts(width=main_map_width,
+        latest_pos = float(self.lons[self.latest_click]), float(self.lats[self.latest_click])
+        res = (gv.tile_sources.EsriImagery * gv.Points((latest_pos)).opts(color='r',size=20,alpha=0.4)* gv.Overlay(all_poly) * points).opts(width=main_map_width,
                                                                                  height=main_map_height,
                                                                                  show_legend=True,
                                                                                  title=os.path.basename(
@@ -487,13 +494,13 @@ class monAppIW_SLC:
             print('nothing to do')
 
         #####
-        maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
+        self.maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
                             x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
                             plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
-        hover = maphandler.select(dict(type=HoverTool))
+        hover = self.maphandler.select(dict(type=HoverTool))
         # hover.tooltips = tooltips
-        maphandler.xgrid.grid_line_color = None
-        maphandler.ygrid.grid_line_color = None
+        self.maphandler.xgrid.grid_line_color = None
+        self.maphandler.ygrid.grid_line_color = None
         # tile_provider = get_provider(CARTODBPOSITRON)
         # maphandler.add_tile(tile_provider)
         if burst_type == 'intra':
@@ -503,21 +510,22 @@ class monAppIW_SLC:
             ds = self.ds_inter
             cds = self.cds_inter
         print('start grid display')
-        maphandler = self.display_intra_inter_burst_grids()
+        self.maphandler = self.display_intra_inter_burst_grids()
 
         if self.xsarobjgrd:
             print('display rougness grid')
-            maphandler = self.display_roughness_grd() * maphandler  # cannot click on the point of the xspec grid
+            self.maphandler = self.display_roughness_grd() * self.maphandler  # cannot click on the point of the xspec grid
             # maphandler = maphandler*self.display_roughness_grd()
             pass
-        posxy = hv.streams.Tap(source=maphandler, x=0, y=0)
+        posxy = hv.streams.Tap(source=self.maphandler, x=0, y=0)
+        print('posxy',posxy,type(posxy),dir(posxy))
         # interactive selection of a point on the map
         # Declare Tap stream with heatmap as source and initial values
 
-        self.lons = cds['longitude'].values
-        self.lats = cds['latitude'].values
 
-        
+
+
+
         # Connect the Tap stream to the tap_histogram callback
         # tap_dmap = hv.DynamicMap(tap_update_xspec_figures, streams=[posxy, checkbox])
         print('creating rows and columns for layout panel/bokeh')
@@ -555,9 +563,6 @@ class monAppIW_SLC:
         else:
             ds = self.ds_inter
             cds = self.cds_inter
-
-        wgs84 = pyproj.CRS('EPSG:4326')
-        utm = pyproj.CRS('EPSG:32618')
 
         project = pyproj.Transformer.from_crs(webMercator, self.projection, always_xy=True).transform
 
