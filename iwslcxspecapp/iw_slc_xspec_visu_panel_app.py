@@ -61,7 +61,7 @@ def get_tile_corner_image_idx(ds, bursti, tile_line_i, tile_sample_i):
 
     """
     top_line = ds['line'].isel({"burst": bursti, "tile_line": tile_line_i}).values + ds.tile_nperseg_line / 2
-    print('ds[sample]', ds['sample'])
+    logging.debug('ds[sample] %s', ds['sample'])
     left_sample = ds['sample'].isel({"burst": bursti, "tile_sample": tile_sample_i}).values - ds.tile_nperseg_sample / 2
     # left_sample = ds['sample'].isel({"tile_sample": tile_sample_i}).values - ds.tile_nperseg_sample / 2
     bottom_line = ds['line'].isel({"burst": bursti, "tile_line": tile_line_i}).values - ds.tile_nperseg_line / 2
@@ -107,7 +107,7 @@ def get_tabulated_burst_data(ds):
     altileline = []
     altilesample = []
     alburst = []
-    print('start tabulation L1B')
+    logging.debug('start tabulation L1B')
     #print('ds["corner_longitude"]', ds['corner_longitude'])
     for iburst in range(ds.burst.size):
         for itilesample in range(ds['corner_longitude'].tile_sample.size):
@@ -214,9 +214,9 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
         ds = ds.drop(['xspectra_Re', 'xspectra_Im'])
     set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam}]
     set_xspec = set_xspec.swap_dims({'freq_line': 'k_az', 'freq_sample': 'k_rg'})
-    print('symmetrize_xspectrum')
+    logging.debug('symmetrize_xspectrum')
     set_xspec = symmetrize_xspectrum(set_xspec, dim_range='k_rg', dim_azimuth='k_az')
-    print('symmetrzied')
+    logging.debug('symmetrzied')
     kx_varname = 'k_rg'
     ky_varname = 'k_az'
     # sp = set_xspec['xspectra_2tau_%s' % typee].mean(dim='2tau')
@@ -225,7 +225,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     else:
         sp = set_xspec['xspectra'] # inter burst case
     sp2 = sp.where(np.logical_and(np.abs(sp[kx_varname]) <= 0.14, np.abs(sp[ky_varname]) <= 0.14), drop=True)
-    print('spectra is ready')
+    logging.debug('spectra is ready')
     hv.extension('bokeh')
     if typee == 'Re':
         im = hv.Image(abs(sp2.real), kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
@@ -244,7 +244,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
                                                                      xlim=(-0.07, 0.07),
                                                                      show_grid=True, clim=(-extrema, extrema))
     tt = hv.Text(-0.06, 0.05, 'burst %s\ntile range: %s\ntile azimuth: %s' % (bu, sam, li), halign='left', fontsize=8)
-    print('add circles on plot')
+    logging.debug('add circles on plot')
     cc = add_cartesian_wavelength_circles(default_values=[100, 300, 600])
     return im * tt * cc
 
@@ -313,7 +313,7 @@ class monAppIW_SLC:
                     tmpo = np.vstack([tmpo, tmpo[0, :]])
                     tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
                     all_poly.append(tmppoly)
-        print('polygons are constructed')
+        logging.debug('polygons are constructed')
         self.projection = ccrs.PlateCarree()
         if self.burst_type == 'intra':
             coco = 'blue'
@@ -323,10 +323,12 @@ class monAppIW_SLC:
                                    label=self.burst_type, color=coco,geo=True,
                                    crs=self.projection).opts(tools=['hover'],
                                                                 size=10)
-        print('crs',points.crs)
+        logging.debug('crs %s',points.crs)
+        logging.debug('latest_click %s',self.latest_click)
         # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
         # gv.tile_sources.Wikipedia  *
         latest_pos = float(self.lons[self.latest_click]), float(self.lats[self.latest_click])
+        logging.debug('latest_pos %s',latest_pos)
         res = (gv.tile_sources.EsriImagery * gv.Points((latest_pos)).opts(color='r',size=20,alpha=0.4)* gv.Overlay(all_poly) * points).opts(width=main_map_width,
                                                                                  height=main_map_height,
                                                                                  show_legend=True,
@@ -351,11 +353,11 @@ class monAppIW_SLC:
         -------
 
         """
-        print('start roughness display')
+        logging.debug('start roughness display')
         lines, samples = get_tile_corner_image_idx(dsl1b, bursti=burst,
                                                    tile_line_i=tile_line_id,
                                                    tile_sample_i=tile_sample_id)
-        print('lines', lines)
+        logging.debug('lines %s', lines)
         lines = np.array(lines).astype(int)
         samples = np.array(samples).astype(int)
         start_line = lines.min()
@@ -387,11 +389,11 @@ class monAppIW_SLC:
         """
         rough = self.xsarobjgrd.dataset['sigma0'].rio.reproject('epsg:4326',
                                                                 shape=(1000, 1000), nodata=np.nan).isel({'pol': 0})
-        print(rough)
+        logging.debug(rough)
         # rough = abs(self.xsarobjgrd.dataset['sigma0'].isel({ 'pol': 0})).values.ravel()
 
         p95percentile = np.nanpercentile(rough.squeeze().values.ravel(), 95)
-        print('p95percentile GRD', p95percentile)
+        logging.debug('p95percentile GRD %s', p95percentile)
         # lons = self.xsarobjgrd.dataset['longitude'].values.ravel()
         # lats = self.xsarobjgrd.dataset['latitude'].values.ravel()
         # print('lats,',lats.shape)
@@ -460,38 +462,38 @@ class monAppIW_SLC:
         if isinstance(L1B_file, list):
             if len(L1B_file) != 0:
                 L1B_file = L1B_file[0]
-                print('new L1B ', L1B_file)
+                logging.debug('new L1B %s ', L1B_file)
             else:
                 pass
                 # L1B_file = L1B_file_default  # security util???
         # prepare data
         logging.info('oui')
 
-        print('L1B_file', L1B_file)
+        logging.debug('L1B_file %s', L1B_file)
         if L1B_file != self.l1bpath or subswath_id != self.subswath or burst_type != self.burst_type:
-            print('go for reading L1B')
+            logging.debug('go for reading L1B')
             self.set_input_l1b_data(L1B_file,burst_type)
 
-            print('ok data is loaded')
+            logging.debug('ok data is loaded')
             if self.display_rough:
                 # base = os.path.basename(self.l1bpath).split('_L1B')[0]
                 base = os.path.basename(os.path.dirname(self.l1bpath))
-                print('base', base)
+                logging.debug('base %s', base)
                 # fullpath_safeL1SLC = get_path_from_base_SAFE.get_path_from_base_SAFE(base)
                 fullpath_safeL1SLC = os.path.join(os.path.dirname(os.path.dirname(L1B_file)), 'raw_data', base)
-                print('fullpath_safeL1SLC', fullpath_safeL1SLC)
+                logging.debug('fullpath_safeL1SLC %s', fullpath_safeL1SLC)
                 if subswath_id is not None:
                     subswath_nb = subswath_id.split('_')[0][-1]
                 str_gdal = 'SENTINEL1_DS:%s:IW%s' % (fullpath_safeL1SLC, subswath_nb)
-                print('str_gdal', str_gdal)
+                logging.debug('str_gdal %s', str_gdal)
                 self.xsarobjslc = xsar.Sentinel1Dataset(str_gdal)  # ,resolution='10m'
                 grdh_path = match_GRD_SLC.match_SLC_GRD(os.path.basename(fullpath_safeL1SLC), type_seek='GRDH')
                 if grdh_path:
                     self.xsarobjgrd = xsar.Sentinel1Dataset(grdh_path, resolution='200m')  # ,resolution='10m'
                 else:
-                    print('impossible to have GRD product')
+                    logging.debug('impossible to have GRD product')
         else:
-            print('nothing to do')
+            logging.debug('nothing to do')
 
         #####
         self.maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
@@ -509,16 +511,16 @@ class monAppIW_SLC:
         else:
             ds = self.ds_inter
             cds = self.cds_inter
-        print('start grid display')
+        logging.debug('start grid display')
         self.maphandler = self.display_intra_inter_burst_grids()
 
         if self.xsarobjgrd:
-            print('display rougness grid')
+            logging.debug('display rougness grid')
             self.maphandler = self.display_roughness_grd() * self.maphandler  # cannot click on the point of the xspec grid
             # maphandler = maphandler*self.display_roughness_grd()
             pass
         posxy = hv.streams.Tap(source=self.maphandler, x=0, y=0)
-        print('posxy',posxy,type(posxy),dir(posxy))
+        logging.debug('posxy %s %s %s',posxy,type(posxy),dir(posxy))
         # interactive selection of a point on the map
         # Declare Tap stream with heatmap as source and initial values
 
@@ -528,18 +530,19 @@ class monAppIW_SLC:
 
         # Connect the Tap stream to the tap_histogram callback
         # tap_dmap = hv.DynamicMap(tap_update_xspec_figures, streams=[posxy, checkbox])
-        print('creating rows and columns for layout panel/bokeh')
-        print('posxy.param.x', posxy.param.x, type(posxy.param.x), dir(posxy.param.x))
+        logging.debug('creating rows and columns for layout panel/bokeh')
+        logging.debug('posxy.param.x %s %s %s', posxy.param.x, type(posxy.param.x), dir(posxy.param.x))
         layout_figures = pn.Row(pn.bind(self.tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
-
+        #maphandler_binded = pn.Row(self.display_intra_inter_burst_grids)
         # try to bind the checkbox_burst with a function to set to zero the previous click (avoid bugs)
-        bindo_burst = pn.bind(self.reset_index_xpsec_selected,value_burst=checkbox_burst)
+        #bindo_burst = pn.bind(self.reset_index_xpsec_selected,value_burst=checkbox_burst)
 
         
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
         bokekjap = pn.Row(
-            pn.Column(pn.Column(checkbox_files, pn.Row(bindo_burst, checkbox_subswath), maphandler, posxy)),
+            pn.Column(pn.Column(checkbox_files, pn.Row(checkbox_burst, checkbox_subswath),
+                                self.maphandler, posxy)),
             layout_figures,
             # pn.Column(
             # pn.Row(xsrehandler1,xsimhandler1,rough_handler1),
@@ -548,7 +551,7 @@ class monAppIW_SLC:
             # pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
             # )
         )
-        print('return bokeh app layout')
+        logging.debug('return bokeh app layout')
         return bokekjap
 
     def tap_update_xspec_figures(self,x, y):
@@ -567,13 +570,13 @@ class monAppIW_SLC:
         project = pyproj.Transformer.from_crs(webMercator, self.projection, always_xy=True).transform
 
         xygeo = transform(project, Point(x,y))
-        print('xny',x,y)
-        print('xygeo,',xygeo, xygeo.x, xygeo.y)
+        logging.debug('xny %s %s',x,y)
+        logging.debug('xygeo, %s %s %s',xygeo, xygeo.x, xygeo.y)
 
         selected_pt = np.argmin((xygeo.x - self.lons) ** 2 + (xygeo.y - self.lats) ** 2)
         self.previous_xspec_selected = copy.copy(self.latest_click)
         self.latest_click = selected_pt
-        print('selected_pt', selected_pt)
+        logging.debug('selected_pt %s', selected_pt)
         burst = cds['burst'].iloc[selected_pt]
         tile_line = cds['Tline'].iloc[selected_pt]
         tile_sample = cds['Tsample'].iloc[selected_pt]
@@ -581,18 +584,18 @@ class monAppIW_SLC:
         xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Im')
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
-        print('xspec figures are OK')
+        logging.debug('xspec figures are OK')
         if self.display_rough:
             rough_handler1 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst,
                                                         tile_sample_id=tile_sample,
                                                         tile_line_id=tile_line,
                                                         dsl1b=ds)
         else:
-            print('empty roughness figure')
+            logging.debug('empty roughness figure')
             rough_handler1 = hv.Image((np.random.rand(100, 100)))
-            print('done')
+            logging.debug('done')
 
-        print('start to create 2nd set of xspec figures')
+        logging.debug('start to create 2nd set of xspec figures')
         burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
         tile_line_prev = cds['Tline'].iloc[self.previous_xspec_selected]
         tile_sample_prev = cds['Tsample'].iloc[self.previous_xspec_selected]
@@ -615,6 +618,8 @@ class monAppIW_SLC:
             # layout_1,
             pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
         )
+        #another call to re draw the map and change the red circle position
+        #self.maphandler = self.display_intra_inter_burst_grids() -> leads to not clickable map... to debug
         return res
 
     def get_checkboxes(self, all_avail_l1B):
