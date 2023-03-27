@@ -1,6 +1,7 @@
 import glob
 import os
 import panel as pn
+import logging
 from bokeh.plotting import figure
 from iwslcxspecapp.iw_slc_xspec_visu_panel_app import monAppIW_SLC,small_plot_width,\
     small_plot_height,checkbox_burst,checkbox_subswath
@@ -32,7 +33,7 @@ print('L1B_file_default',L1B_file_default)
 
 ############################################################################
 #####################NO MAIN BUT IT LOOKS LIKE#############################
-
+logging.basicConfig(level=logging.INFO,force=True)
 
 xsrehandler1 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
                       tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
