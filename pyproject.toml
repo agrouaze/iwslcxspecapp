@@ -18,6 +18,8 @@ dependencies = [
     "xarray-datatree",
     "panel",
 ]
+readme.file = "README.md"
+readme.content-type = "text/markdown"
 
 dynamic = ["version"]
 [build-system]
