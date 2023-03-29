@@ -434,7 +434,8 @@ class monAppIW_SLC:
         self.ds_inter = read_data_L1B(L1B_file, typee='inter')
         self.cds_inter = get_tabulated_burst_data(self.ds_inter)
 
-    def reset_index_xpsec_selected(self,value_burst):
+    @pn.depends(checkbox_burst.param.value)
+    def reset_index_xpsec_selected(self):
         """
         index of points selected are integer in the order of vectorized tabulated data
         :return:
@@ -536,7 +537,8 @@ class monAppIW_SLC:
                                         y=posxy.param.y))
         #maphandler_binded = pn.Row(self.display_intra_inter_burst_grids)
         # try to bind the checkbox_burst with a function to set to zero the previous click (avoid bugs)
-        #bindo_burst = pn.bind(self.reset_index_xpsec_selected,value_burst=checkbox_burst)
+        #print('checkbox_burst.param',checkbox_burst.param)
+        #bindo_burst = pn.Row(pn.bind(self.reset_index_xpsec_selected,value_burst=checkbox_burst.param.value))
 
         
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
@@ -544,13 +546,12 @@ class monAppIW_SLC:
             pn.Column(pn.Column(checkbox_files, pn.Row(checkbox_burst, checkbox_subswath),
                                 self.maphandler, posxy)),
             layout_figures,
-            # pn.Column(
-            # pn.Row(xsrehandler1,xsimhandler1,rough_handler1),
-
-            # layout_1,
-            # pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
-            # )
         )
+        # bokekjap = pn.Row(
+        #     pn.Column(pn.Column(checkbox_files, bindo_burst,pn.Row(checkbox_subswath),
+        #                         self.maphandler, posxy)),
+        #     layout_figures,
+        # )
         logging.debug('return bokeh app layout')
         return bokekjap
 
