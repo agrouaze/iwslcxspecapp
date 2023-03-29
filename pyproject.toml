@@ -1,6 +1,6 @@
 [project]
 name = "iwslcxspecapp"
-requires-python = ">= 3.9"
+requires-python = "< 3.11"
 description = "Python library to deploy panel application to visualize L1B SAR Sentinel-1 cross  spectrum"
 license = {text = "GPL-3.0"}
 classifiers = [
