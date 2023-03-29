@@ -191,7 +191,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     -------
 
     """
-    logging.info('start display_xspec_cart_holo')
+    logging.debug('start display_xspec_cart_holo')
     if typee == 'Re':
         cmap = mcolors.LinearSegmentedColormap.from_list("", ["white", "violet", "mediumpurple", "cyan", "springgreen",
                                                               "yellow", "red"])
@@ -230,8 +230,10 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     if typee == 'Re':
         im = hv.Image(abs(sp2.real), kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
                                                                           height=small_plot_height,
-                                                                          cmap=cmap, colorbar=True, xlim=(
-                -0.07, 0.07))  # gist_ncar_r , 'cet_linear_wyor_100_45_c55'
+                                                                          cmap=cmap, colorbar=True,
+                                                                          xlim=(    -0.07, 0.07),
+                                                                          ylim=(-0.07, 0.07),
+                                                                          )  # gist_ncar_r , 'cet_linear_wyor_100_45_c55'
     else:
         if np.all(np.isnan(sp2.imag)):
             extrema = 1
@@ -242,6 +244,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
                                                                      height=small_plot_height,
                                                                      cmap=cmap, colorbar=True,
                                                                      xlim=(-0.07, 0.07),
+                                                                     ylim=(-0.07, 0.07),
                                                                      show_grid=True, clim=(-extrema, extrema))
     tt = hv.Text(-0.06, 0.05, 'burst %s\ntile range: %s\ntile azimuth: %s' % (bu, sam, li), halign='left', fontsize=8)
     logging.debug('add circles on plot')
