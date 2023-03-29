@@ -247,12 +247,11 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     logging.debug('add circles on plot')
     cc = add_cartesian_wavelength_circles(default_values=[100, 300, 600])
     return im * tt * cc
-
-
 #
-#
+
 
 class monAppIW_SLC:
+
     def __init__(self):
         self.previous_xspec_selected = 0
         self.latest_click = 0
@@ -270,72 +269,7 @@ class monAppIW_SLC:
         self.lons =  None
         self.lats = None
 
-    def display_intra_inter_burst_grids(self):
-        """
 
-        Parameters
-        ----------
-        ds dataset xarray one sub-swath intra or inter burst
-        cds pandas DataFrame computed from ds
-        burst_type str intra or inter
-
-        Returns
-        -------
-
-        """
-        all_poly = []
-        if self.burst_type == 'intra':
-            ds = self.ds_intra.load()
-            cds = self.cds_intra
-        else:
-            ds = self.ds_inter.load()
-            cds = self.cds_inter
-        self.lons = cds['longitude'].values
-        self.lats = cds['latitude'].values
-        ds['corner_longitude'] = ds['corner_longitude']
-        ds['corner_latitude'] = ds['corner_latitude']
-        for iburst in range(ds.burst.size):
-            for itilesample in range(ds['corner_longitude'].tile_sample.size):
-                for itileline in range(ds['corner_longitude'].tile_line.size):
-                    clon = ds['corner_longitude'].isel(
-                        {'burst': iburst, 'tile_line': itileline,
-                         'tile_sample': itilesample}).values.ravel(order='A')
-                    clat = ds['corner_latitude'].isel(
-                        {'burst': iburst, 'tile_line': itileline,
-                         'tile_sample': itilesample}).values.ravel(order='A')
-                    clon2 = copy.copy(clon)
-                    clat2 = copy.copy(clat)
-                    clat2[2] = clat[3]
-                    clat2[3] = clat[2]
-                    clon2[2] = clon[3]
-                    clon2[3] = clon[2]
-                    tmpo = np.stack([clon2, clat2]).T
-                    tmpo = np.vstack([tmpo, tmpo[0, :]])
-                    tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
-                    all_poly.append(tmppoly)
-        logging.debug('polygons are constructed')
-        self.projection = ccrs.PlateCarree()
-        if self.burst_type == 'intra':
-            coco = 'blue'
-        else:
-            coco = 'red'
-        points = cds.hvplot.points(x='longitude', y='latitude', hover_cols='all', use_index=False,
-                                   label=self.burst_type, color=coco,geo=True,
-                                   crs=self.projection).opts(tools=['hover'],
-                                                                size=10)
-        logging.debug('crs %s',points.crs)
-        logging.debug('latest_click %s',self.latest_click)
-        # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
-        # gv.tile_sources.Wikipedia  *
-        latest_pos = float(self.lons[self.latest_click]), float(self.lats[self.latest_click])
-        logging.debug('latest_pos %s',latest_pos)
-        res = (gv.tile_sources.EsriImagery * gv.Points((latest_pos)).opts(color='r',size=20,alpha=0.4)* gv.Overlay(all_poly) * points).opts(width=main_map_width,
-                                                                                 height=main_map_height,
-                                                                                 show_legend=True,
-                                                                                 title=os.path.basename(
-                                                                                     self.l1bpath) + '\n' + self.subswath,
-                                                                                 fontsize={'title': 8})
-        return res
 
     def display_roughness_slc(self, l1b_path, subswath, burst, tile_sample_id, tile_line_id, dsl1b):
         """
@@ -443,7 +377,8 @@ class monAppIW_SLC:
         self.previous_xspec_selected = 0
         self.latest_click = 0
 
-    def update_app_burst(self, burst_type, subswath_id, L1B_file, all_avail_l1B):
+
+    def update_app_burst(self,burst_type=None, subswath_id=None, L1B_file=None, all_avail_l1B=None):
         """
 
         Parameters
@@ -457,6 +392,7 @@ class monAppIW_SLC:
         -------
 
         """
+        logging.info('update_app_burst')
         self.display_rough = False  # tmp swith off for local test, march 2023
         # if L1B_file==[]:
         #     L1B_file = L1B_file_default #security util???
@@ -498,8 +434,8 @@ class monAppIW_SLC:
 
         #####
         self.maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
-                            x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
-                            plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
+                         x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
+                         plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
         hover = self.maphandler.select(dict(type=HoverTool))
         # hover.tooltips = tooltips
         self.maphandler.xgrid.grid_line_color = None
@@ -535,16 +471,12 @@ class monAppIW_SLC:
         logging.debug('posxy.param.x %s %s %s', posxy.param.x, type(posxy.param.x), dir(posxy.param.x))
         layout_figures = pn.Row(pn.bind(self.tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
-        #maphandler_binded = pn.Row(self.display_intra_inter_burst_grids)
-        # try to bind the checkbox_burst with a function to set to zero the previous click (avoid bugs)
-        #print('checkbox_burst.param',checkbox_burst.param)
-        #bindo_burst = pn.Row(pn.bind(self.reset_index_xpsec_selected,value_burst=checkbox_burst.param.value))
 
-        
+
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
         bokekjap = pn.Row(
             pn.Column(pn.Column(checkbox_files, pn.Row(checkbox_burst, checkbox_subswath),
-                                self.maphandler, posxy)),
+                                self.maphandler)),
             layout_figures,
         )
         # bokekjap = pn.Row(
@@ -557,7 +489,6 @@ class monAppIW_SLC:
 
     def tap_update_xspec_figures(self,x, y):
         """
-        previoulsy a method of update_app_burst method
         :param y:
         :return:
         """
@@ -620,7 +551,7 @@ class monAppIW_SLC:
             pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
         )
         #another call to re draw the map and change the red circle position
-        #self.maphandler = self.display_intra_inter_burst_grids() -> leads to not clickable map... to debug
+        #self.maphandler = self.display_intra_inter_burst_grids() #-> leads to not clickable map... to debug
         return res
 
     def get_checkboxes(self, all_avail_l1B):
@@ -630,6 +561,73 @@ class monAppIW_SLC:
         checkbox_files = pn.widgets.Select(options=all_avail_l1B, name='file')
         ##############################
         return checkbox_files
+
+
+    def display_intra_inter_burst_grids(self):
+        """
+
+        Parameters
+        ----------
+        ds dataset xarray one sub-swath intra or inter burst
+        cds pandas DataFrame computed from ds
+        burst_type str intra or inter
+
+        Returns
+        -------
+
+        """
+        all_poly = []
+        if self.burst_type == 'intra':
+            ds = self.ds_intra.load()
+            cds = self.cds_intra
+        else:
+            ds = self.ds_inter.load()
+            cds = self.cds_inter
+        self.lons = cds['longitude'].values
+        self.lats = cds['latitude'].values
+        ds['corner_longitude'] = ds['corner_longitude']
+        ds['corner_latitude'] = ds['corner_latitude']
+        for iburst in range(ds.burst.size):
+            for itilesample in range(ds['corner_longitude'].tile_sample.size):
+                for itileline in range(ds['corner_longitude'].tile_line.size):
+                    clon = ds['corner_longitude'].isel(
+                        {'burst': iburst, 'tile_line': itileline,
+                         'tile_sample': itilesample}).values.ravel(order='A')
+                    clat = ds['corner_latitude'].isel(
+                        {'burst': iburst, 'tile_line': itileline,
+                         'tile_sample': itilesample}).values.ravel(order='A')
+                    clon2 = copy.copy(clon)
+                    clat2 = copy.copy(clat)
+                    clat2[2] = clat[3]
+                    clat2[3] = clat[2]
+                    clon2[2] = clon[3]
+                    clon2[3] = clon[2]
+                    tmpo = np.stack([clon2, clat2]).T
+                    tmpo = np.vstack([tmpo, tmpo[0, :]])
+                    tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
+                    all_poly.append(tmppoly)
+        logging.debug('polygons are constructed')
+        self.projection = ccrs.PlateCarree()
+        if self.burst_type == 'intra':
+            coco = 'blue'
+        else:
+            coco = 'red'
+        points = cds.hvplot.points(x='longitude', y='latitude', hover_cols='all', use_index=False,
+                                   label=self.burst_type, color=coco, geo=True,
+                                   crs=self.projection).opts(tools=['hover','tap'],
+                                                             size=10,nonselection_alpha=0.1)
+        logging.debug('crs %s', points.crs)
+        # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
+        # gv.tile_sources.Wikipedia  *
+
+
+        res = (gv.tile_sources.EsriImagery * gv.Overlay(all_poly) * points).opts(width=main_map_width,
+                                                                                         height=main_map_height,
+                                                                                         show_legend=True,
+                                                                                         title=os.path.basename(
+                                                                                             self.l1bpath) + '\n' + self.subswath,
+                                                                                         fontsize={'title': 8})
+        return res
 
 ############################################################################
 #####################NO MAIN BUT IT LOOKS LIKE#############################

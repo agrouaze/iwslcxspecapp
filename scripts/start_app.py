@@ -74,7 +74,7 @@ layout = pn.Row(pn.bind(instclass.update_app_burst,
                         burst_type=checkbox_burst.param.value,
                         subswath_id=checkbox_subswath.param.value,
                         L1B_file=instclass.get_checkboxes(all_avail_l1B).param.value,
-                        all_avail_l1B = all_avail_l1B
+                        all_avail_l1B = all_avail_l1B,
                         ))
 # pn.Row(widget_dmap).servable()
 # layout = pn.Row(xsrehandler1)
