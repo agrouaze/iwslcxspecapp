@@ -36,6 +36,7 @@ from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
                           GeoJSONDataSource, HoverTool,
                           LinearColorMapper, Slider)
 from bokeh.plotting import figure
+
 webMercator = pyproj.CRS('EPSG:3857')
 main_map_width = 600
 main_map_height = 500
@@ -78,8 +79,8 @@ def get_tile_corner_image_idx(ds, bursti, tile_line_i, tile_sample_i):
 
 def read_data_L1B(L1B_file, typee='intra'):
     # parentdir = os.path.basename(os.path.dirname(L1B_file))
-    #dt = datatree.open_datatree(L1B_file)
-    ds = xr.open_dataset(L1B_file, group=typee+'burst')
+    # dt = datatree.open_datatree(L1B_file)
+    ds = xr.open_dataset(L1B_file, group=typee + 'burst')
     # if typee == 'intra':
     #     # ds = dt[subswath]['intraburst_xspectra'].to_dataset()
     #     #ds = dt['intraburst'].to_dataset()
@@ -107,8 +108,10 @@ def get_tabulated_burst_data(ds):
     altileline = []
     altilesample = []
     alburst = []
+    all_cutoff = []
+    all_ground_heading = []
     logging.debug('start tabulation L1B')
-    #print('ds["corner_longitude"]', ds['corner_longitude'])
+    # print('ds["corner_longitude"]', ds['corner_longitude'])
     for iburst in range(ds.burst.size):
         for itilesample in range(ds['corner_longitude'].tile_sample.size):
             for itileline in range(ds['corner_longitude'].tile_line.size):
@@ -116,6 +119,10 @@ def get_tabulated_burst_data(ds):
                     ds['longitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
                 allats.append(
                     ds['latitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
+                all_ground_heading.append(ds['ground_heading'].isel({'burst': iburst,
+                                                            'tile_line': itileline, 'tile_sample': itilesample}).values)
+                all_cutoff.append(ds['azimuth_cutoff'].isel({'burst': iburst,
+                                                            'tile_line': itileline, 'tile_sample': itilesample}).values)
                 altileline.append(itileline)
                 altilesample.append(itilesample)
                 alburst.append(iburst)
@@ -123,7 +130,8 @@ def get_tabulated_burst_data(ds):
     #                                      'Tline':altileline,'burst':alburst}))
     # cds = hv.Dataset(data={'longitude':allons,'latitude':allats,'Tsample':altilesample,'Tline':altileline,'burst':alburst})
     cds = pd.DataFrame(
-        {'longitude': allons, 'latitude': allats, 'Tsample': altilesample, 'Tline': altileline, 'burst': alburst})
+        {'longitude': allons, 'latitude': allats, 'Tsample': altilesample, 'Tline': altileline,
+         'burst': alburst,'heading':all_ground_heading,'cutoff':all_cutoff})
     return cds
 
 
@@ -169,14 +177,14 @@ def add_cartesian_wavelength_circles(default_values=[100, 300, 600]):
     all_circles = []
     for cck in res:
         ccv = res[cck]
-        ccim = hv.Curve((ccv[:, 0], ccv[:, 1]), label='%s m' % cck)
+        ccim = hv.Curve((ccv[:, 0], ccv[:, 1]), label='%s m' % cck).opts(xlim=(-0.07,0.07))
         all_circles.append(ccim)
     return hv.Overlay(all_circles)
 
 
 #
 #
-def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
+def display_xspec_cart_holo(ds, bu=0, li=0, sam=0,heading=0,cutoff=None, typee='Re'):
     """
 
     Parameters
@@ -185,6 +193,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     bu: int
     li: int
     sam: int
+    heading: float [degree from North]
     typee :str
 
     Returns
@@ -193,7 +202,8 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     """
     logging.debug('start display_xspec_cart_holo')
     if typee == 'Re':
-        cmap = mcolors.LinearSegmentedColormap.from_list("", ["white", "violet", "mediumpurple", "cyan", "springgreen",
+        cmap = mcolors.LinearSegmentedColormap.from_list("", ["white", "violet", "mediumpurple",
+                                                              "cyan", "springgreen",
                                                               "yellow", "red"])
     else:
         cmap = 'PuOr'
@@ -205,11 +215,11 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     #     ky_varname = 'ky'
     # else:
     # gather Re and Imaginary part
-    if 'xspectra_0tau_Re' in ds: #intra burst case
+    if 'xspectra_0tau_Re' in ds:  # intra burst case
         for tautau in range(3):
             ds['xspectra_%stau' % tautau] = ds['xspectra_%stau_Re' % tautau] + 1j * ds['xspectra_%stau_Im' % tautau]
             ds = ds.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
-    else: # inter burst case
+    else:  # inter burst case
         ds['xspectra'] = ds['xspectra_Re'] + 1j * ds['xspectra_Im']
         ds = ds.drop(['xspectra_Re', 'xspectra_Im'])
     set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam}]
@@ -219,37 +229,95 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     logging.debug('symmetrzied')
     kx_varname = 'k_rg'
     ky_varname = 'k_az'
+
     # sp = set_xspec['xspectra_2tau_%s' % typee].mean(dim='2tau')
     if 'xspectra_2tau' in set_xspec:
         sp = set_xspec['xspectra_2tau'].mean(dim='2tau')
     else:
-        sp = set_xspec['xspectra'] # inter burst case
+        sp = set_xspec['xspectra']  # inter burst case
     sp2 = sp.where(np.logical_and(np.abs(sp[kx_varname]) <= 0.14, np.abs(sp[ky_varname]) <= 0.14), drop=True)
+    # rotation des spectres comme dans wallpaper (sept 2023)
+    heading = np.radians(heading)
+    heading = np.arctan2(np.sin(heading), np.cos(heading))
+    keast = sp2['k_rg'] * np.cos(heading) + sp2['k_az'] * np.sin(heading)
+    knorth = sp2['k_az'] * np.cos(heading) - sp2['k_rg'] * np.sin(heading)
+    keast.attrs.update({'long_name': 'wavenumber in East direction', 'units': 'rad/m'})
+    knorth.attrs.update({'long_name': 'wavenumber in North direction', 'units': 'rad/m'})
+    sp2 = sp2.assign_coords({'k_east': keast, 'k_north': knorth})
+    # print('keast',sp2['k_east'])
+    heading = np.arctan2(np.sin(heading), np.cos(heading))
+    range_rotation = -np.degrees(heading) if np.abs(np.degrees(heading)) <= 90 else -np.degrees(heading) + 180
+    azimuth_rotation = -np.degrees(heading) + 90 if np.degrees(heading) >= 0 else -np.degrees(heading) - 90
+
+
+
     logging.debug('spectra is ready')
     hv.extension('bokeh')
     if typee == 'Re':
-        im = hv.Image(abs(sp2.real), kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
+        # im = hv.Image(abs(sp2.real), kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
+        #                                                                   height=small_plot_height,
+        #                                                                   cmap=cmap, colorbar=True,
+        #                                                                   xlim=(-0.07, 0.07),
+        #                                                                   ylim=(-0.07, 0.07),
+        #                                                                   )  # gist_ncar_r , 'cet_linear_wyor_100_45_c55'
+        # print(sp2.k_east.data)
+        sp3 = abs(sp2.real)
+        sp3.name = 'rere'
+        metasp3 = xr.Dataset()
+        metasp3['rere'] = sp3
+        # print(sp3)
+        sp4 = xr.Dataset()
+        sp4['k_east'] = metasp3.k_east.values.ravel()
+        sp4['k_north'] = metasp3.k_north.values.ravel()
+        sp4['rere'] = metasp3['rere'].values.ravel()
+        stacked = np.stack([metasp3.k_east.values.ravel(),
+                            metasp3.k_north.values.ravel(),metasp3['rere'].values.ravel()]).T
+        # print('stacked',stacked.shape)
+        # print(metasp3.k_east.shape,metasp3.k_north.shape,metasp3['rere'].shape)
+        im = hv.QuadMesh((metasp3.k_east.T,metasp3.k_north,metasp3['rere']),kdims=['wavenumber in East direction [rad/m]',
+                                                                 'wavenumber in North direction [rad/m]']).opts(width=small_plot_width,
                                                                           height=small_plot_height,
                                                                           cmap=cmap, colorbar=True,
-                                                                          xlim=(    -0.07, 0.07),
-                                                                          ylim=(-0.07, 0.07),
-                                                                          )  # gist_ncar_r , 'cet_linear_wyor_100_45_c55'
+                                                                          xlim=(-0.07, 0.07),
+                                                                          ylim=(-0.07, 0.07))
     else:
         if np.all(np.isnan(sp2.imag)):
             extrema = 1
         else:
             extrema = float(abs(sp2.imag).max().values)
 
-        im = hv.Image(sp2.imag, kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
-                                                                     height=small_plot_height,
-                                                                     cmap=cmap, colorbar=True,
-                                                                     xlim=(-0.07, 0.07),
-                                                                     ylim=(-0.07, 0.07),
-                                                                     show_grid=True, clim=(-extrema, extrema))
+        # im = hv.Image(sp2.imag, kdims=[kx_varname, ky_varname]).opts(width=small_plot_width,
+        #                                                              height=small_plot_height,
+        #                                                              cmap=cmap, colorbar=True,
+        #                                                              xlim=(-0.07, 0.07),
+        #                                                              ylim=(-0.07, 0.07),
+        #                                                              show_grid=True, clim=(-extrema, extrema))
+        iii = sp2.imag.data.astype(float)
+        print('iii',iii.dtype)
+        im = hv.QuadMesh((sp2.k_east.T, sp2.k_north, iii),kdims=['wavenumber in East direction [rad/m]',
+                                                                 'wavenumber in North direction [rad/m]']).opts(width=small_plot_width,
+                                                                                    height=small_plot_height,
+                                                                                    cmap=cmap, colorbar=True,
+                                                                                    xlim=(-0.07, 0.07),
+                                                                                    ylim=(-0.07, 0.07),clim=(-extrema,
+                                                                                                             extrema))
     tt = hv.Text(-0.06, 0.05, 'burst %s\ntile range: %s\ntile azimuth: %s' % (bu, sam, li), halign='left', fontsize=8)
     logging.debug('add circles on plot')
     cc = add_cartesian_wavelength_circles(default_values=[100, 300, 600])
-    return im * tt * cc
+    xp = 0.07 * np.cos(heading)
+    yp = 0.07 * np.sin(heading)
+    if cutoff:
+        # add cutoff lines
+        curveup_cutoff = hv.Curve((np.array([-xp, xp]) + 2 * np.pi / cutoff * np.sin(heading),
+                 np.array([yp, -yp]) + 2 * np.pi / cutoff * np.cos(heading))).opts(xlim=(-0.07, 0.07),ylim=(-0.07, 0.07))  # cutoff upper line
+        curvebot_cutoff = hv.Curve((np.array([-xp, xp]) - 2 * np.pi / cutoff * np.sin(heading),
+                 np.array([yp, -yp]) - 2 * np.pi / cutoff * np.cos(heading))).opts(xlim=(-0.07, 0.07),ylim=(-0.07, 0.07))  # cutoff lower line
+        res = im * tt * cc * curveup_cutoff * curvebot_cutoff
+    else:
+        res = im * tt * cc
+    return res.opts(xlim=(-0.07, 0.07),ylim=(-0.07, 0.07))
+
+
 #
 
 
@@ -269,10 +337,8 @@ class monAppIW_SLC:
         self.xsarobjslc = None
         self.xsarobjgrd = None
         self.burst_type = 'intra'
-        self.lons =  None
+        self.lons = None
         self.lats = None
-
-
 
     def display_roughness_slc(self, l1b_path, subswath, burst, tile_sample_id, tile_line_id, dsl1b):
         """
@@ -361,7 +427,7 @@ class monAppIW_SLC:
         res = gv.Path(self.xsarobjgrd.footprint)
         return res
 
-    def set_input_l1b_data(self,L1B_file,burst_type):
+    def set_input_l1b_data(self, L1B_file, burst_type):
         self.l1bpath = L1B_file
         subswath_id = os.path.basename(L1B_file).split('-')[1] + '_' + os.path.basename(L1B_file).split('-')[3]
         self.subswath = subswath_id
@@ -380,8 +446,7 @@ class monAppIW_SLC:
         self.previous_xspec_selected = 0
         self.latest_click = 0
 
-
-    def update_app_burst(self,burst_type=None, subswath_id=None, L1B_file=None, all_avail_l1B=None):
+    def update_app_burst(self, burst_type=None, subswath_id=None, L1B_file=None, all_avail_l1B=None):
         """
 
         Parameters
@@ -412,7 +477,7 @@ class monAppIW_SLC:
         logging.debug('L1B_file %s', L1B_file)
         if L1B_file != self.l1bpath or subswath_id != self.subswath or burst_type != self.burst_type:
             logging.debug('go for reading L1B')
-            self.set_input_l1b_data(L1B_file,burst_type)
+            self.set_input_l1b_data(L1B_file, burst_type)
 
             logging.debug('ok data is loaded')
             if self.display_rough:
@@ -437,8 +502,8 @@ class monAppIW_SLC:
 
         #####
         self.maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
-                         x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
-                         plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
+                                 x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
+                                 plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
         hover = self.maphandler.select(dict(type=HoverTool))
         # hover.tooltips = tooltips
         self.maphandler.xgrid.grid_line_color = None
@@ -460,13 +525,9 @@ class monAppIW_SLC:
             # maphandler = maphandler*self.display_roughness_grd()
             pass
         posxy = hv.streams.Tap(source=self.maphandler, x=0, y=0)
-        logging.debug('posxy %s %s %s',posxy,type(posxy),dir(posxy))
+        logging.debug('posxy %s %s %s', posxy, type(posxy), dir(posxy))
         # interactive selection of a point on the map
         # Declare Tap stream with heatmap as source and initial values
-
-
-
-
 
         # Connect the Tap stream to the tap_histogram callback
         # tap_dmap = hv.DynamicMap(tap_update_xspec_figures, streams=[posxy, checkbox])
@@ -474,7 +535,6 @@ class monAppIW_SLC:
         logging.debug('posxy.param.x %s %s %s', posxy.param.x, type(posxy.param.x), dir(posxy.param.x))
         layout_figures = pn.Row(pn.bind(self.tap_update_xspec_figures, x=posxy.param.x,
                                         y=posxy.param.y))
-
 
         checkbox_files = self.get_checkboxes(all_avail_l1B=all_avail_l1B)
         bokekjap = pn.Row(
@@ -490,7 +550,7 @@ class monAppIW_SLC:
         logging.debug('return bokeh app layout')
         return bokekjap
 
-    def tap_update_xspec_figures(self,x, y):
+    def tap_update_xspec_figures(self, x, y):
         """
         :param y:
         :return:
@@ -504,9 +564,9 @@ class monAppIW_SLC:
 
         project = pyproj.Transformer.from_crs(webMercator, self.projection, always_xy=True).transform
 
-        xygeo = transform(project, Point(x,y))
-        logging.debug('xny %s %s',x,y)
-        logging.debug('xygeo, %s %s %s',xygeo, xygeo.x, xygeo.y)
+        xygeo = transform(project, Point(x, y))
+        logging.debug('xny %s %s', x, y)
+        logging.debug('xygeo, %s %s %s', xygeo, xygeo.x, xygeo.y)
 
         selected_pt = np.argmin((xygeo.x - self.lons) ** 2 + (xygeo.y - self.lats) ** 2)
         self.previous_xspec_selected = copy.copy(self.latest_click)
@@ -515,8 +575,12 @@ class monAppIW_SLC:
         burst = cds['burst'].iloc[selected_pt]
         tile_line = cds['Tline'].iloc[selected_pt]
         tile_sample = cds['Tsample'].iloc[selected_pt]
-        xsrehandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Re')
-        xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Im')
+        heading = cds['heading'].iloc[selected_pt]
+        cutoff = cds['cutoff'].iloc[selected_pt]
+        # print('cutoff',cutoff)
+        # print('heading0',heading)
+        xsrehandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample,heading=heading,cutoff=cutoff, typee='Re')
+        xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample,heading=heading,cutoff=cutoff, typee='Im')
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
         logging.debug('xspec figures are OK')
@@ -534,10 +598,15 @@ class monAppIW_SLC:
         burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
         tile_line_prev = cds['Tline'].iloc[self.previous_xspec_selected]
         tile_sample_prev = cds['Tsample'].iloc[self.previous_xspec_selected]
-
+        cutoff = cds['cutoff'].iloc[self.previous_xspec_selected]
+        heading = cds['heading'].iloc[self.previous_xspec_selected]
+        # print('cutoff',cutoff)
+        # print('heading',heading)
         xsrehandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
+                                               heading=heading,cutoff=cutoff,
                                                typee='Re')
-        xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
+        xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,cutoff=cutoff,
+                                               heading=heading,
                                                typee='Im')
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
@@ -553,8 +622,8 @@ class monAppIW_SLC:
             # layout_1,
             pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
         )
-        #another call to re draw the map and change the red circle position
-        #self.maphandler = self.display_intra_inter_burst_grids() #-> leads to not clickable map... to debug
+        # another call to re draw the map and change the red circle position
+        # self.maphandler = self.display_intra_inter_burst_grids() #-> leads to not clickable map... to debug
         return res
 
     def get_checkboxes(self, all_avail_l1B):
@@ -564,7 +633,6 @@ class monAppIW_SLC:
         checkbox_files = pn.widgets.Select(options=all_avail_l1B, name='file')
         ##############################
         return checkbox_files
-
 
     def display_intra_inter_burst_grids(self):
         """
@@ -617,19 +685,18 @@ class monAppIW_SLC:
             coco = 'red'
         points = cds.hvplot.points(x='longitude', y='latitude', hover_cols='all', use_index=False,
                                    label=self.burst_type, color=coco, geo=True,
-                                   crs=self.projection).opts(tools=['hover','tap'],
-                                                             size=10,nonselection_alpha=0.1)
+                                   crs=self.projection).opts(tools=['hover', 'tap'],
+                                                             size=10, nonselection_alpha=0.1)
         logging.debug('crs %s', points.crs)
         # points = gv.Points(('longitude','latitude'),source=cds).opts(tools=['hover'])
         # gv.tile_sources.Wikipedia  *
 
-
         res = (gv.tile_sources.EsriImagery * gv.Overlay(all_poly) * points).opts(width=main_map_width,
-                                                                                         height=main_map_height,
-                                                                                         show_legend=True,
-                                                                                         title=os.path.basename(
-                                                                                             self.l1bpath) + '\n' + self.subswath,
-                                                                                         fontsize={'title': 8})
+                                                                                 height=main_map_height,
+                                                                                 show_legend=True,
+                                                                                 title=os.path.basename(
+                                                                                     self.l1bpath) + '\n' + self.subswath,
+                                                                                 fontsize={'title': 8})
         return res
 
 ############################################################################
