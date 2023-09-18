@@ -58,7 +58,7 @@ rough_handler2 = figure(plot_height=small_plot_height, plot_width=small_plot_wid
 streams_select = dict(burst_type=checkbox_burst.param.value)
 
 #files_dir = os.path.abspath(os.path.join(src_dir,'..','assets','S1*','s1*L1B_xspec_IFR*.nc'))
-pattern_list_files_dir = os.path.abspath(os.path.join(files_dir,'S1*','s1*L1B_xspec_IFR*.nc'))
+pattern_list_files_dir = os.path.abspath(os.path.join(files_dir,'S1*20210929T220404*','s1*vv*L1B_xspec_IFR*.nc'))
 print('files_dir',files_dir)
 print('pattern_list_files_dir',pattern_list_files_dir)
 all_avail_l1B = sorted(glob.glob(pattern_list_files_dir))
