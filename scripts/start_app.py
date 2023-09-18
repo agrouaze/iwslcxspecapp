@@ -16,13 +16,6 @@ else:
 print('config_path',config_path)
 with open(config_path, 'r') as stream:
     data_loaded = yaml.safe_load(stream)
-# L1B_file_default = "/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20180104T061957_20180104T062025_020001_02211F_77E6.SAFE_L1B_xspec_IFR_VV_0.1.nc"
-# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20210413T043041_20210413T043109_037427_04695F_FE5C.SAFE_L1B_xspec_IFR_0.3.nc'
-# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20220921T063225_20220921T063252_045099_05639C_D284.SAFE/s1a-iw2-slc-vv-20220921t063225-20220921t063251-045099-05639c-005_L1B_xspec_IFR_0.6.nc'
-# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20220921T063225_20220921T063252_045099_05639C_D284.SAFE/s1a-iw2-slc-vv-20220921t063225-20220921t063251-045099-05639c-005_L1B_xspec_IFR_0.6.nc'
-# L1B_file_default = '/home1/scratch/agrouaze/l1b/S1A_IW_SLC__1SDV_20170907T103019_20170907T103047_018268_01EB76_5F55.SAFE/s1a-iw2-slc-vv-20170907t103020-20170907t103045-018268-01eb76-005_L1B_xspec_IFR_0.6.nc'
-# subswath = 'subswath_1'
-#subswath = 'iw1_vv'
 L1B_file_default = data_loaded['datadir']
 files_dir = data_loaded['files_dir']
 if files_dir == 'None':
@@ -59,6 +52,8 @@ streams_select = dict(burst_type=checkbox_burst.param.value)
 
 #files_dir = os.path.abspath(os.path.join(src_dir,'..','assets','S1*','s1*L1B_xspec_IFR*.nc'))
 pattern_list_files_dir = os.path.abspath(os.path.join(files_dir,'S1*','s1*L1B_xspec_IFR*.nc'))
+pattern_list_files_dir = os.path.abspath(os.path.join(files_dir,'S1*','s1*iw1*vv*20210306*L1B_xspec_IFR*.nc'))
+pattern_list_files_dir = os.path.abspath(os.path.join(files_dir,'S1*20180104*','s1*iw1*vv*L1B_xspec_IFR*.nc')) #one safe
 print('files_dir',files_dir)
 print('pattern_list_files_dir',pattern_list_files_dir)
 all_avail_l1B = sorted(glob.glob(pattern_list_files_dir))
@@ -69,11 +64,11 @@ print('all available L1B', len(all_avail_l1B))
 # widget_dmap = hv.DynamicMap(update_app_burst, streams=streams_select)
 # widget_dmap = pn.bind(update_app_burst,burst_type=checkbox.param.value)
 instclass = monAppIW_SLC()
-
+print('checkbox_burst.param.value',checkbox_burst.param.value,checkbox_burst.value)
 layout = pn.Row(pn.bind(instclass.update_app_burst,
-                        burst_type=checkbox_burst.param.value,
-                        subswath_id=checkbox_subswath.param.value,
-                        L1B_file=instclass.get_checkboxes(all_avail_l1B).param.value,
+                        burst_type=checkbox_burst.value,
+                        subswath_id=checkbox_subswath.value,
+                        L1B_file=instclass.get_checkboxes(all_avail_l1B).value,
                         all_avail_l1B = all_avail_l1B,
                         ))
 # pn.Row(widget_dmap).servable()

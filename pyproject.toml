@@ -1,6 +1,6 @@
 [project]
 name = "iwslcxspecapp"
-requires-python = "== 3.10.*"
+#requires-python = "== 3.10.*"
 description = "Python library to deploy panel application to visualize L1B SAR Sentinel-1 cross  spectrum"
 license = {text = "GPL-3.0"}
 classifiers = [
@@ -17,6 +17,9 @@ dependencies = [
     "datashader",
     "xarray-datatree",
     "panel",
+]
+authors = [
+  {name = "Antoine Grouazel"}
 ]
 readme.file = "README.md"
 readme.content-type = "text/markdown"
@@ -37,3 +40,6 @@ profile = "black"
 skip_gitignore = true
 float_to_top = true
 default_section = "THIRDPARTY"
+
+[project.scripts]
+start_app = "iwslcxspecapp.scripts.start_app:main"
