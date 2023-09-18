@@ -21,10 +21,12 @@ import xsar
 from shapely.ops import transform
 from shapely.geometry import Point
 import pyproj
+from functools import partial
 import sys
 # import iwslcxspecapp.get_path_from_base_SAFE
 # import iwslcxspecapp.match_GRD_SLC
 from iwslcxspecapp.symmetrize_xspec import symmetrize_xspectrum
+from slcl1butils.compute import stack_iw_l1b
 import os
 import glob
 from cartopy import crs
@@ -76,17 +78,112 @@ def get_tile_corner_image_idx(ds, bursti, tile_line_i, tile_sample_i):
     return lines, samples
 
 
-def read_data_L1B(L1B_file, typee='intra'):
-    # parentdir = os.path.basename(os.path.dirname(L1B_file))
-    #dt = datatree.open_datatree(L1B_file)
-    ds = xr.open_dataset(L1B_file, group=typee+'burst')
-    # if typee == 'intra':
-    #     # ds = dt[subswath]['intraburst_xspectra'].to_dataset()
-    #     #ds = dt['intraburst'].to_dataset()
-    #
-    # else:
-    #     # ds = dt[subswath]['interburst_xspectra'].to_dataset()
-    #     #ds = dt['interburst'].to_dataset()
+def get_index_wavenumbers(ds):
+    #print(2 * np.pi / 0.16, 'm')
+    indkrg = np.where(abs(ds['k_rg'] - 0.16) == np.amin(abs(ds['k_rg'] - 0.16)))[0][0]
+    #print('indkrg', indkrg)
+    #print(ds['k_rg'].isel(freq_sample=indkrg).values)
+
+    val_k_az = 0.14
+    indkaz_up = np.where(abs(ds['k_az'] - val_k_az) == np.amin(abs(ds['k_az'] - val_k_az)))[0][0]
+    #print('indkaz_up', indkaz_up)
+    indkaz_bo = np.where(abs(ds['k_az'] + val_k_az) == np.amin(abs(ds['k_az'] + val_k_az)))[0][0]
+    #print('indkaz_bo', indkaz_bo)
+    #print(ds['k_az'].isel(freq_line=indkaz_bo).values)
+    return indkaz_bo,indkaz_up,indkrg
+
+
+def get_reference_wavenumbers(ds,indkaz_bo,indkaz_up):
+    """
+
+    Parameters
+    ----------
+    ds xr.Dataset
+    indkaz_bo int
+    indkaz_up int
+
+    Returns
+    -------
+
+    """
+
+    k_rg = ds['k_rg'].isel(burst=0,tile_sample=0)
+    k_rg_ref = k_rg[k_rg < 0.16]
+
+    #k_rg_ref = k_rg_ref.swap_dims({'freq_sample':'k_rg'})
+    k_rg_ref = k_rg_ref.assign_coords({'freq_sample':np.arange(len(k_rg_ref))})
+    k_rg_ref = xr.DataArray(k_rg_ref.values,coords={'freq_sample':np.arange(len(k_rg_ref))},dims=['freq_sample'])
+    logging.info('k_rg_ref %s',k_rg_ref)
+    k_az = ds['k_az']
+    k_az_ref = k_az.isel(freq_line=slice(indkaz_bo, indkaz_up))
+
+    #k_az_ref = k_az_ref.swap_dims({'freq_line': 'k_az'})
+    k_az_ref = k_az_ref.assign_coords({'freq_line': np.arange(len(k_az_ref))})
+    k_az_ref = xr.DataArray(k_az_ref.values, coords={'freq_line': np.arange(len(k_az_ref))}, dims=['freq_line'])
+    return k_rg_ref,k_az_ref
+
+def preprrocess(filee,indkrg,indkaz_bo,indkaz_up,k_rg_ref,k_az_ref,typee):
+    """
+
+    Parameters
+    ----------
+    filee str full path
+    indkrg int
+    indkaz_bo int
+    indkaz_up int
+    k_rg_ref xr.DataArray
+    k_az_ref xr.DataArray
+    typee str intra or inter
+
+    Returns
+    -------
+    dsu xr.Dataset
+
+    """
+    dsu = xr.open_dataset(filee,group=typee+'burst',engine='netcdf4')
+    dsu = dsu.isel(freq_sample=slice(0, indkrg), freq_line=slice(indkaz_bo, indkaz_up))
+    dsu = dsu.assign_coords({'k_rg': k_rg_ref.values, 'k_az': k_az_ref.values})
+    if 'xspectra_0tau_Re' in dsu:
+        for tautau in range(3):
+            dsu['xspectra_%stau' % tautau] = dsu['xspectra_%stau_Re' % tautau] + 1j * dsu['xspectra_%stau_Im' % tautau]
+            dsu = dsu.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
+    return dsu
+
+def read_data_L1B(all_l1B, typee='intra'):
+    """
+
+    Parameters
+    ----------
+    all_l1B list of str
+    typee str intra or inter [optional]
+
+    Returns
+    -------
+
+    """
+    tmp = []
+    logging.info('read first %s',all_l1B[0])
+    #dsfirst = xr.open_dataset(all_l1B[0],group=typee+'burst',engine='netcdf4')
+    #logging.info('get_index_wavenumbers')
+    #indkaz_bo,indkaz_up,indkrg = get_index_wavenumbers(dsfirst)
+    #k_rg_ref,k_az_ref = get_reference_wavenumbers(dsfirst, indkaz_bo, indkaz_up)
+    #logging.info('we have k_rg_ref')
+    # xx = partial(preprrocess,indkrg=indkrg,indkaz_bo=indkaz_bo,indkaz_up=indkaz_up,k_rg_ref=k_rg_ref,k_az_ref=k_az_ref,typee=typee)
+    # consolidated_list = []
+    # logging.info('start loop on L1B')
+    # for ff in all_l1B:
+    #     tmpds0 = xr.open_dataset(ff,group=typee+'burst',engine='netcdf4')
+    #     if 'freq_line' in tmpds0.dims:
+    #         tmpds = preprrocess(ff, indkrg, indkaz_bo, indkaz_up, k_rg_ref, k_az_ref, typee)
+    #         consolidated_list.append(ff)
+    #         tmp.append(tmpds)
+    #     else:
+    #         logging.warning('%s seems empty',ff)
+
+    # print('nb nc file to read',len(consolidated_list))
+    #ds = xr.concat(tmp,dim='subswath')
+    ds = stack_iw_l1b.read_data_L1B(all_l1B, typee=typee, sens=None)
+    #ds = xr.open_mfdataset(consolidated_list,combine='by_coords',preprocess=xx)
     return ds
 
 
@@ -107,33 +204,37 @@ def get_tabulated_burst_data(ds):
     altileline = []
     altilesample = []
     alburst = []
+    alsubswath  = []
     logging.debug('start tabulation L1B')
     #print('ds["corner_longitude"]', ds['corner_longitude'])
-    for iburst in range(ds.burst.size):
-        for itilesample in range(ds['corner_longitude'].tile_sample.size):
-            for itileline in range(ds['corner_longitude'].tile_line.size):
-                allons.append(
-                    ds['longitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
-                allats.append(
-                    ds['latitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
-                altileline.append(itileline)
-                altilesample.append(itilesample)
-                alburst.append(iburst)
+    for isubsw in range(ds.subswath.size):
+        for iburst in range(ds.burst.size):
+            for itilesample in range(ds['corner_longitude'].tile_sample.size):
+                for itileline in range(ds['corner_longitude'].tile_line.size):
+                    if 'subswath' in ds['longitude'].dims:
+                        allons.append(
+                            ds['longitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample,'subswath':isubsw}).values)
+                        allats.append(
+                            ds['latitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample,
+                                                 'subswath': isubsw}).values)
+                    else:
+                        allons.append(
+                            ds['longitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
+                        allats.append(
+                            ds['latitude'].isel({'burst': iburst, 'tile_line': itileline, 'tile_sample': itilesample}).values)
+
+                    altileline.append(itileline)
+                    altilesample.append(itilesample)
+                    alburst.append(iburst)
+                    alsubswath.append(isubsw)
     # cds = ColumnDataSource(pd.DataFrame({'longitude':allons,'latitude':allats,'Tsample':altilesample,
     #                                      'Tline':altileline,'burst':alburst}))
     # cds = hv.Dataset(data={'longitude':allons,'latitude':allats,'Tsample':altilesample,'Tline':altileline,'burst':alburst})
     cds = pd.DataFrame(
-        {'longitude': allons, 'latitude': allats, 'Tsample': altilesample, 'Tline': altileline, 'burst': alburst})
+        {'longitude': allons, 'latitude': allats, 'Tsample': altilesample, 'Tline': altileline, 'burst': alburst,'alsubswath': alsubswath})
     return cds
 
 
-#
-#
-
-#
-
-#
-#
 def add_cartesian_wavelength_circles(default_values=[100, 300, 600]):
     """
 
@@ -176,7 +277,7 @@ def add_cartesian_wavelength_circles(default_values=[100, 300, 600]):
 
 #
 #
-def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
+def display_xspec_cart_holo(ds, bu=0, li=0, sam=0,subswath=0, typee='Re'):
     """
 
     Parameters
@@ -185,6 +286,7 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     bu: int
     li: int
     sam: int
+    subswath : int
     typee :str
 
     Returns
@@ -205,17 +307,25 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
     #     ky_varname = 'ky'
     # else:
     # gather Re and Imaginary part
-    if 'xspectra_0tau_Re' in ds: #intra burst case
-        for tautau in range(3):
-            ds['xspectra_%stau' % tautau] = ds['xspectra_%stau_Re' % tautau] + 1j * ds['xspectra_%stau_Im' % tautau]
-            ds = ds.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
+    logging.debug('ds : %s',ds)
+    if 'xspectra_0tau_Re' in ds or 'xspectra_0tau' in ds: #intra burst case
+        if 'xspectra_0tau_Re' in ds:
+            for tautau in range(3):
+                ds['xspectra_%stau' % tautau] = ds['xspectra_%stau_Re' % tautau] + 1j * ds['xspectra_%stau_Im' % tautau]
+                ds = ds.drop(['xspectra_%stau_Re' % tautau, 'xspectra_%stau_Im' % tautau])
+        else:
+            logging.debug('association Re+Im deja faite ici')
     else: # inter burst case
         ds['xspectra'] = ds['xspectra_Re'] + 1j * ds['xspectra_Im']
         ds = ds.drop(['xspectra_Re', 'xspectra_Im'])
-    set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam}]
-    set_xspec = set_xspec.swap_dims({'freq_line': 'k_az', 'freq_sample': 'k_rg'})
+    set_xspec = ds[{'burst': bu, 'tile_line': li, 'tile_sample': sam, 'subswath':subswath}]
+    logging.info('freq_line %s',set_xspec['freq_line'])
+    logging.info('k_az %s', set_xspec['k_az'])
+    logging.info('set_xspec %s',set_xspec)
+    #set_xspec = set_xspec.swap_dims({'freq_line': 'k_az', 'freq_sample': 'k_rg'})
+
     logging.debug('symmetrize_xspectrum')
-    set_xspec = symmetrize_xspectrum(set_xspec, dim_range='k_rg', dim_azimuth='k_az')
+
     logging.debug('symmetrzied')
     kx_varname = 'k_rg'
     ky_varname = 'k_az'
@@ -224,6 +334,12 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0, typee='Re'):
         sp = set_xspec['xspectra_2tau'].mean(dim='2tau')
     else:
         sp = set_xspec['xspectra'] # inter burst case
+    #sp = sp.assign_coords({'k_az':ds['k_az'],'k_rg':ds['k_az']})
+    #sp['k_az'] = xr.DataArray(ds['k_az'].values,coords={'freq_line':ds['freq_line']},dims=['freq_line'])
+    #sp['k_rg'] = xr.DataArray(ds['k_rg'].values, coords={'freq_sample': ds['freq_sample']}, dims=['freq_sample'])
+    sp = sp.swap_dims({'freq_line': 'k_az', 'freq_sample': 'k_rg'})
+    logging.info('sp: %s',sp)
+    sp = symmetrize_xspectrum(sp, dim_range='k_rg', dim_azimuth='k_az')
     sp2 = sp.where(np.logical_and(np.abs(sp[kx_varname]) <= 0.14, np.abs(sp[ky_varname]) <= 0.14), drop=True)
     logging.debug('spectra is ready')
     hv.extension('bokeh')
@@ -361,15 +477,20 @@ class monAppIW_SLC:
         res = gv.Path(self.xsarobjgrd.footprint)
         return res
 
-    def set_input_l1b_data(self,L1B_file,burst_type):
-        self.l1bpath = L1B_file
-        subswath_id = os.path.basename(L1B_file).split('-')[1] + '_' + os.path.basename(L1B_file).split('-')[3]
+    def set_input_l1b_data(self,all_l1b,burst_type):
+        logging.info('into set_input_l1b_data()')
+        self.l1bpath = all_l1b[0]
+        subswath_id = os.path.basename(self.l1bpath).split('-')[1] + '_' + os.path.basename(self.l1bpath).split('-')[3]
         self.subswath = subswath_id
         self.burst_type = burst_type
-        self.ds_intra = read_data_L1B(L1B_file, typee='intra')
+        self.ds_intra = copy.copy(read_data_L1B(all_l1b, typee='intra'))
+        logging.info('ds_intra OK')
         self.cds_intra = get_tabulated_burst_data(self.ds_intra)
-        self.ds_inter = read_data_L1B(L1B_file, typee='inter')
+        logging.info('cds intra OK')
+        self.ds_inter = copy.copy(read_data_L1B(all_l1b, typee='inter'))
+        logging.info('ds inter OK')
         self.cds_inter = get_tabulated_burst_data(self.ds_inter)
+        logging.info('cds inter OK')
 
     @pn.depends(checkbox_burst.param.value)
     def reset_index_xpsec_selected(self):
@@ -409,12 +530,12 @@ class monAppIW_SLC:
         # prepare data
         logging.info('oui')
 
-        logging.debug('L1B_file %s', L1B_file)
+        logging.info('L1B_file %s', L1B_file)
         if L1B_file != self.l1bpath or subswath_id != self.subswath or burst_type != self.burst_type:
-            logging.debug('go for reading L1B')
-            self.set_input_l1b_data(L1B_file,burst_type)
-
-            logging.debug('ok data is loaded')
+            logging.info('go for reading L1B')
+            self.set_input_l1b_data(all_avail_l1B,burst_type)
+            print('ok data is loaded')
+            logging.info('ok data is loaded')
             if self.display_rough:
                 # base = os.path.basename(self.l1bpath).split('_L1B')[0]
                 base = os.path.basename(os.path.dirname(self.l1bpath))
@@ -436,6 +557,7 @@ class monAppIW_SLC:
             logging.debug('nothing to do')
 
         #####
+        logging.info('init map')
         self.maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
                          x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
                          plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
@@ -445,12 +567,12 @@ class monAppIW_SLC:
         self.maphandler.ygrid.grid_line_color = None
         # tile_provider = get_provider(CARTODBPOSITRON)
         # maphandler.add_tile(tile_provider)
-        if burst_type == 'intra':
-            ds = self.ds_intra
-            cds = self.cds_intra
-        else:
-            ds = self.ds_inter
-            cds = self.cds_inter
+        # if burst_type == 'intra':
+        #     ds = self.ds_intra
+        #     cds = self.cds_intra
+        # else:
+        #     ds = self.ds_inter
+        #     cds = self.cds_inter
         logging.debug('start grid display')
         self.maphandler = self.display_intra_inter_burst_grids()
 
@@ -506,17 +628,18 @@ class monAppIW_SLC:
 
         xygeo = transform(project, Point(x,y))
         logging.debug('xny %s %s',x,y)
-        logging.debug('xygeo, %s %s %s',xygeo, xygeo.x, xygeo.y)
-
+        logging.info('xygeo, %s %s %s',xygeo, xygeo.x, xygeo.y)
+        logging.info('self.lons %s',self.lons)
         selected_pt = np.argmin((xygeo.x - self.lons) ** 2 + (xygeo.y - self.lats) ** 2)
         self.previous_xspec_selected = copy.copy(self.latest_click)
         self.latest_click = selected_pt
-        logging.debug('selected_pt %s', selected_pt)
+        logging.info('selected_pt %s', selected_pt)
         burst = cds['burst'].iloc[selected_pt]
         tile_line = cds['Tline'].iloc[selected_pt]
         tile_sample = cds['Tsample'].iloc[selected_pt]
-        xsrehandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Re')
-        xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, typee='Im')
+        subswath_latest = cds['alsubswath'].iloc[selected_pt]
+        xsrehandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, subswath=subswath_latest, typee='Re')
+        xsimhandler1 = display_xspec_cart_holo(ds, bu=burst, li=tile_line, sam=tile_sample, subswath=subswath_latest, typee='Im')
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
         logging.debug('xspec figures are OK')
@@ -534,10 +657,10 @@ class monAppIW_SLC:
         burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
         tile_line_prev = cds['Tline'].iloc[self.previous_xspec_selected]
         tile_sample_prev = cds['Tsample'].iloc[self.previous_xspec_selected]
-
-        xsrehandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
+        subswath_prev = cds['alsubswath'].iloc[self.previous_xspec_selected]
+        xsrehandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev, subswath=subswath_prev,
                                                typee='Re')
-        xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev,
+        xsimhandler2 = display_xspec_cart_holo(ds, bu=burst_prev, li=tile_line_prev, sam=tile_sample_prev, subswath=subswath_prev,
                                                typee='Im')
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
@@ -586,29 +709,31 @@ class monAppIW_SLC:
         else:
             ds = self.ds_inter.load()
             cds = self.cds_inter
+
         self.lons = cds['longitude'].values
         self.lats = cds['latitude'].values
-        ds['corner_longitude'] = ds['corner_longitude']
-        ds['corner_latitude'] = ds['corner_latitude']
-        for iburst in range(ds.burst.size):
-            for itilesample in range(ds['corner_longitude'].tile_sample.size):
-                for itileline in range(ds['corner_longitude'].tile_line.size):
-                    clon = ds['corner_longitude'].isel(
-                        {'burst': iburst, 'tile_line': itileline,
-                         'tile_sample': itilesample}).values.ravel(order='A')
-                    clat = ds['corner_latitude'].isel(
-                        {'burst': iburst, 'tile_line': itileline,
-                         'tile_sample': itilesample}).values.ravel(order='A')
-                    clon2 = copy.copy(clon)
-                    clat2 = copy.copy(clat)
-                    clat2[2] = clat[3]
-                    clat2[3] = clat[2]
-                    clon2[2] = clon[3]
-                    clon2[3] = clon[2]
-                    tmpo = np.stack([clon2, clat2]).T
-                    tmpo = np.vstack([tmpo, tmpo[0, :]])
-                    tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
-                    all_poly.append(tmppoly)
+        # ds['corner_longitude'] = ds['corner_longitude']
+        # ds['corner_latitude'] = ds['corner_latitude']
+        for isubswath  in range(ds.subswath.size):
+            for iburst in range(ds.burst.size):
+                for itilesample in range(ds['corner_longitude'].tile_sample.size):
+                    for itileline in range(ds['corner_longitude'].tile_line.size):
+                        clon = ds['corner_longitude'].isel(
+                            {'burst': iburst, 'tile_line': itileline,
+                             'tile_sample': itilesample,'subswath':isubswath}).values.ravel(order='A')
+                        clat = ds['corner_latitude'].isel(
+                            {'burst': iburst, 'tile_line': itileline,
+                             'tile_sample': itilesample,'subswath':isubswath}).values.ravel(order='A')
+                        clon2 = copy.copy(clon)
+                        clat2 = copy.copy(clat)
+                        clat2[2] = clat[3]
+                        clat2[3] = clat[2]
+                        clon2[2] = clon[3]
+                        clon2[3] = clon[2]
+                        tmpo = np.stack([clon2, clat2]).T
+                        tmpo = np.vstack([tmpo, tmpo[0, :]])
+                        tmppoly = gv.Path((tmpo[:, 0], tmpo[:, 1]), kdims=['Longitude', 'Latitude'], ).opts(color='grey')
+                        all_poly.append(tmppoly)
         logging.debug('polygons are constructed')
         self.projection = ccrs.PlateCarree()
         if self.burst_type == 'intra':
