@@ -279,7 +279,8 @@ def display_xspec_cart_holo(ds, bu=0, li=0, sam=0,heading=0,cutoff=None, typee='
                                                                           height=small_plot_height,
                                                                           cmap=cmap, colorbar=True,
                                                                           xlim=(-0.07, 0.07),
-                                                                          ylim=(-0.07, 0.07))
+                                                                          ylim=(-0.07, 0.07),
+                                                                        bgcolor='lightgray')
     else:
         if np.all(np.isnan(sp2.imag)):
             extrema = 1
@@ -584,15 +585,15 @@ class monAppIW_SLC:
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
         logging.debug('xspec figures are OK')
-        if self.display_rough:
-            rough_handler1 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst,
-                                                        tile_sample_id=tile_sample,
-                                                        tile_line_id=tile_line,
-                                                        dsl1b=ds)
-        else:
-            logging.debug('empty roughness figure')
-            rough_handler1 = hv.Image((np.random.rand(100, 100)))
-            logging.debug('done')
+        # if self.display_rough:
+        #     rough_handler1 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst,
+        #                                                 tile_sample_id=tile_sample,
+        #                                                 tile_line_id=tile_line,
+        #                                                 dsl1b=ds)
+        # else:
+        #     logging.debug('empty roughness figure')
+        #     rough_handler1 = hv.Image((np.random.rand(100, 100)))
+        #     logging.debug('done')
 
         logging.debug('start to create 2nd set of xspec figures')
         burst_prev = cds['burst'].iloc[self.previous_xspec_selected]
@@ -610,17 +611,17 @@ class monAppIW_SLC:
                                                typee='Im')
         # rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_with,
         #                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
-        if self.display_rough:
-            rough_handler2 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst_prev,
-                                                        tile_sample_id=tile_sample_prev,
-                                                        tile_line_id=tile_line_prev,
-                                                        dsl1b=ds)
-        else:
-            rough_handler2 = hv.Image(np.random.rand(100, 100))
+        # if self.display_rough:
+        #     rough_handler2 = self.display_roughness_slc(self.l1bpath, self.subswath, burst=burst_prev,
+        #                                                 tile_sample_id=tile_sample_prev,
+        #                                                 tile_line_id=tile_line_prev,
+        #                                                 dsl1b=ds)
+        # else:
+        #     rough_handler2 = hv.Image(np.random.rand(100, 100))
         res = pn.Column(
-            pn.Row(xsrehandler1, xsimhandler1, rough_handler1),
+            pn.Row(xsrehandler1, xsimhandler1),
             # layout_1,
-            pn.Row(xsrehandler2, xsimhandler2, rough_handler2),
+            pn.Row(xsrehandler2, xsimhandler2),
         )
         # another call to re draw the map and change the red circle position
         # self.maphandler = self.display_intra_inter_burst_grids() #-> leads to not clickable map... to debug
