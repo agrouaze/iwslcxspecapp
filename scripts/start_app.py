@@ -35,14 +35,14 @@ print('L1B_file_default',L1B_file_default)
 #####################NO MAIN BUT IT LOOKS LIKE#############################
 logging.basicConfig(level=logging.INFO,force=True)
 
-xsrehandler1 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
-                      tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
+xsrehandler1 = figure(height=small_plot_height, width=small_plot_width,
+                      tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover",background_fill_color='blue')
 # xsrehandler1 = display_xspec_cart_holo(ds_intra,bu = 3,li = 0,sam = 4,typee='Re')
-xsimhandler1 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
-                      tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
+xsimhandler1 = figure(height=small_plot_height, width=small_plot_width,
+                      tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover",background_fill_color='blue')
 # xsimhandler1 = display_xspec_cart_holo(ds,bu = 3,li = 0,sam = 4,typee='Im')
-rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
-                        tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
+# rough_handler1 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
+#                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
 
 xsrehandler2 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
                       tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
@@ -50,8 +50,8 @@ xsrehandler2 = figure(plot_height=small_plot_height, plot_width=small_plot_width
 xsimhandler2 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
                       tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
 # xsimhandler2 = display_xspec_cart_holo(ds,bu = 3,li = 0,sam = 5,typee='Im')
-rough_handler2 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
-                        tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
+# rough_handler2 = figure(plot_height=small_plot_height, plot_width=small_plot_width,
+#                         tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover")
 
 # button intra / inter
 
