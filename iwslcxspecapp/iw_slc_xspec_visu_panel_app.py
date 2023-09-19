@@ -503,8 +503,8 @@ class monAppIW_SLC:
 
         #####
         self.maphandler = figure(x_range=(-19000000, 8000000), y_range=(-1000000, 7000000),
-                                 x_axis_type="mercator", y_axis_type="mercator", plot_height=800,
-                                 plot_width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
+                                 x_axis_type="mercator", y_axis_type="mercator", height=800,
+                                 width=950, tools="pan, wheel_zoom, box_zoom, reset,lasso_select,hover,tap")
         hover = self.maphandler.select(dict(type=HoverTool))
         # hover.tooltips = tooltips
         self.maphandler.xgrid.grid_line_color = None
